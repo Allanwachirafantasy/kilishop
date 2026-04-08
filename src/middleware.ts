@@ -1,21 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-function getProjectRef(): string {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  return url.match(/https:\/\/([^.]+)\./)?.[1] ?? '';
-}
-
-function injectTokenFromHeader(request: NextRequest): void {
-  const token = request.headers.get('x-sb-token');
-  if (!token) return;
-  const hasCookie = request.cookies.getAll().some((c) => c.name.includes('auth-token'));
-  if (hasCookie) return;
-  request.cookies.set(`sb-${getProjectRef()}-auth-token`, token);
-}
-
 export async function middleware(request: NextRequest) {
-  injectTokenFromHeader(request);
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -27,22 +13,22 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value);
-            supabaseResponse.cookies.set(name, value, options);
-          });
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          supabaseResponse = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          );
         },
       },
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Refresh session
+  const { data: { user } } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
 
-  // Protect admin routes — only admins can access
+  // Protect admin routes
   if (pathname.startsWith('/admin')) {
     if (!user) {
       const url = request.nextUrl.clone();
@@ -50,11 +36,19 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set('redirect', pathname);
       return NextResponse.redirect(url);
     }
-    // Check role from user metadata
-    const role =
+
+    // Check role from user_profiles table (most reliable)
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const role = profile?.role ||
       user.user_metadata?.role ||
       user.app_metadata?.role ||
       'customer';
+
     if (role !== 'admin') {
       const url = request.nextUrl.clone();
       url.pathname = '/homepage';
@@ -70,6 +64,13 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set('redirect', pathname);
       return NextResponse.redirect(url);
     }
+  }
+
+  // Redirect root to homepage
+  if (pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/homepage';
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;

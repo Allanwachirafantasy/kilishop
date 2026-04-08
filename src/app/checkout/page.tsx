@@ -1,44 +1,34 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Icon from '@/components/ui/AppIcon';
-import { formatPrice } from '@/lib/sampleData';
+import AppImage from '@/components/ui/AppImage';
+import { getCartItems, createOrder, formatPrice, type CartItem, type DeliveryAddress } from '@/lib/supabase/services';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Step = 'delivery' | 'payment' | 'review';
-
-interface DeliveryForm {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  county: string;
-  postalCode: string;
-  notes: string;
-}
 
 const KENYAN_COUNTIES = [
   'Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika',
   'Nyeri', 'Meru', 'Kakamega', 'Kisii', 'Machakos', 'Kilifi',
 ];
 
-const orderItems = [
-  { name: 'Samsung Galaxy A54 5G', qty: 1, price: 28999, image: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=100&auto=format&fit=crop&q=80' },
-  { name: 'Wireless Earbuds Pro', qty: 2, price: 3499, image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=100&auto=format&fit=crop&q=80' },
-  { name: 'Vitamin C Face Serum', qty: 1, price: 1899, image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=100&auto=format&fit=crop&q=80' },
-];
-
-const subtotal = orderItems.reduce((s, i) => s + i.price * i.qty, 0);
-const shipping = 0;
-const total = subtotal + shipping;
-
 export default function CheckoutPage() {
+  const { user, profile, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [loadingCart, setLoadingCart] = useState(true);
   const [step, setStep] = useState<Step>('delivery');
   const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'card' | 'cod'>('mpesa');
-  const [form, setForm] = useState<DeliveryForm>({
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [orderError, setOrderError] = useState('');
+
+  const [form, setForm] = useState<DeliveryAddress>({
     firstName: '',
     lastName: '',
     email: '',
@@ -49,32 +39,50 @@ export default function CheckoutPage() {
     postalCode: '',
     notes: '',
   });
-  const [formErrors, setFormErrors] = useState<Partial<DeliveryForm>>({});
-  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof DeliveryAddress, string>>>({});
 
-  const steps: { key: Step; label: string; icon: string }[] = [
-    { key: 'delivery', label: 'Delivery', icon: '📦' },
-    { key: 'payment', label: 'Payment', icon: '💳' },
-    { key: 'review', label: 'Review', icon: '✅' },
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login?redirect=/checkout');
+      return;
+    }
+    if (user) {
+      getCartItems(user.id).then(setCartItems).finally(() => setLoadingCart(false));
+      if (profile) {
+        const [firstName = '', ...rest] = (profile.fullName || '').split(' ');
+        setForm((f) => ({
+          ...f,
+          firstName,
+          lastName: rest.join(' '),
+          email: profile.email || '',
+          phone: profile.phone || '',
+        }));
+      }
+    }
+  }, [user, authLoading, profile, router]);
+
+  const subtotal = cartItems.reduce((s, i) => s + (i.product?.price || 0) * i.quantity, 0);
+  const shipping = subtotal >= 2000 ? 0 : 350;
+  const total = subtotal + shipping;
+
+  const steps: { key: Step; label: string }[] = [
+    { key: 'delivery', label: 'Delivery' },
+    { key: 'payment', label: 'Payment' },
+    { key: 'review', label: 'Review' },
   ];
-
   const stepIndex = steps.findIndex((s) => s.key === step);
 
-  const handleFormChange = (field: keyof DeliveryForm, value: string) => {
+  const handleFormChange = (field: keyof DeliveryAddress, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-    if (formErrors[field]) {
-      setFormErrors((prev) => ({ ...prev, [field]: '' }));
-    }
+    if (formErrors[field]) setFormErrors((prev) => ({ ...prev, [field]: '' }));
   };
 
   const validateDelivery = (): boolean => {
-    const errors: Partial<DeliveryForm> = {};
+    const errors: Partial<Record<keyof DeliveryAddress, string>> = {};
     if (!form.firstName.trim()) errors.firstName = 'First name is required';
     if (!form.lastName.trim()) errors.lastName = 'Last name is required';
     if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) errors.email = 'Valid email required';
-    if (!form.phone.trim() || !/^(\+254|0)[17]\d{8}$/.test(form.phone.replace(/\s/g, ''))) {
-      errors.phone = 'Valid Kenyan phone number required (e.g. 0712345678)';
-    }
+    if (!form.phone.trim()) errors.phone = 'Phone number is required';
     if (!form.address.trim()) errors.address = 'Delivery address is required';
     if (!form.city.trim()) errors.city = 'City is required';
     if (!form.county) errors.county = 'County is required';
@@ -88,7 +96,7 @@ export default function CheckoutPage() {
     } else if (step === 'payment') {
       setStep('review');
     } else if (step === 'review') {
-      setOrderPlaced(true);
+      handlePlaceOrder();
     }
   };
 
@@ -97,28 +105,66 @@ export default function CheckoutPage() {
     else if (step === 'review') setStep('payment');
   };
 
+  const handlePlaceOrder = async () => {
+    if (!user || cartItems.length === 0) return;
+    setPlacingOrder(true);
+    setOrderError('');
+    try {
+      const order = await createOrder(user.id, cartItems, form, paymentMethod, shipping, 0);
+      setOrderNumber(order.orderNumber);
+      setOrderPlaced(true);
+    } catch (err: any) {
+      setOrderError(err?.message || 'Failed to place order. Please try again.');
+    } finally {
+      setPlacingOrder(false);
+    }
+  };
+
+  if (authLoading || loadingCart) {
+    return (
+      <div className="min-h-screen flex flex-col bg-kili-bg">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <span className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (cartItems.length === 0 && !orderPlaced) {
+    return (
+      <div className="min-h-screen flex flex-col bg-kili-bg">
+        <Header />
+        <main className="flex-1 flex items-center justify-center px-4">
+          <div className="text-center">
+            <div className="text-6xl mb-4">🛒</div>
+            <h2 className="text-xl font-semibold text-kili-fg mb-2">Your cart is empty</h2>
+            <Link href="/product-listing" className="btn-primary mt-4 inline-flex">Start Shopping</Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   if (orderPlaced) {
     return (
       <div className="min-h-screen flex flex-col bg-kili-bg">
-        <Header cartCount={0} />
+        <Header />
         <main className="flex-1 flex items-center justify-center px-4 py-16">
           <div className="max-w-md w-full text-center space-y-6">
-            {/* Success animation */}
             <div className="w-20 h-20 rounded-full bg-green-500/20 border-2 border-green-500 flex items-center justify-center mx-auto">
               <Icon name="CheckIcon" size={40} className="text-green-400" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-display font-semibold text-kili-fg mb-2">
-                Order Confirmed! 🎉
-              </h1>
-              <p className="text-kili-muted">
-                Thank you, {form.firstName || 'Valued Customer'}! Your order has been placed successfully.
-              </p>
+              <h1 className="text-2xl sm:text-3xl font-display font-semibold text-kili-fg mb-2">Order Confirmed! 🎉</h1>
+              <p className="text-kili-muted">Thank you, {form.firstName}! Your order has been placed successfully.</p>
             </div>
             <div className="card-dark rounded-xl p-5 text-left space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-kili-muted">Order Number</span>
-                <span className="text-kili-fg font-semibold">#KSH-{Math.floor(Math.random() * 900000 + 100000)}</span>
+                <span className="text-kili-fg font-semibold">#{orderNumber}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-kili-muted">Estimated Delivery</span>
@@ -138,8 +184,9 @@ export default function CheckoutPage() {
                 <Icon name="HomeIcon" size={16} />
                 Continue Shopping
               </Link>
-              <Link href="/homepage" className="btn-secondary justify-center">
-                Track Order
+              <Link href="/dashboard" className="btn-secondary justify-center">
+                <Icon name="ClipboardDocumentListIcon" size={16} />
+                View Orders
               </Link>
             </div>
           </div>
@@ -151,10 +198,8 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-kili-bg">
-      <Header cartCount={orderItems.length} />
-
+      <Header />
       <main className="flex-1">
-        {/* Breadcrumb */}
         <div className="border-b border-kili-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
             <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-kili-subtle">
@@ -168,33 +213,17 @@ export default function CheckoutPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <h1 className="text-xl sm:text-2xl font-display font-semibold text-kili-fg mb-6">
-            Checkout
-          </h1>
+          <h1 className="text-xl sm:text-2xl font-display font-semibold text-kili-fg mb-6">Checkout</h1>
 
           {/* Step indicator */}
-          <div className="flex items-center mb-8 max-w-sm" role="list" aria-label="Checkout steps">
+          <div className="flex items-center mb-8 max-w-sm">
             {steps.map((s, idx) => (
               <React.Fragment key={s.key}>
-                <div
-                  className="flex flex-col items-center gap-1"
-                  role="listitem"
-                  aria-current={s.key === step ? 'step' : undefined}
-                >
-                  <div
-                    className={`step-dot ${
-                      idx < stepIndex ? 'completed' : idx === stepIndex ? 'active' : 'inactive'
-                    }`}
-                  >
-                    {idx < stepIndex ? (
-                      <Icon name="CheckIcon" size={14} />
-                    ) : (
-                      <span>{idx + 1}</span>
-                    )}
+                <div className="flex flex-col items-center gap-1">
+                  <div className={`step-dot ${idx < stepIndex ? 'completed' : idx === stepIndex ? 'active' : 'inactive'}`}>
+                    {idx < stepIndex ? <Icon name="CheckIcon" size={14} /> : <span>{idx + 1}</span>}
                   </div>
-                  <span className={`text-xs font-medium hidden xs:block ${idx === stepIndex ? 'text-primary' : 'text-kili-subtle'}`}>
-                    {s.label}
-                  </span>
+                  <span className={`text-xs font-medium hidden xs:block ${idx === stepIndex ? 'text-primary' : 'text-kili-subtle'}`}>{s.label}</span>
                 </div>
                 {idx < steps.length - 1 && (
                   <div className={`step-line mx-2 mb-5 ${idx < stepIndex ? 'completed' : ''}`} aria-hidden="true" />
@@ -204,9 +233,7 @@ export default function CheckoutPage() {
           </div>
 
           <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
-            {/* Left: Step content */}
             <div className="lg:col-span-2 space-y-6">
-
               {/* STEP 1: Delivery */}
               {step === 'delivery' && (
                 <div className="card-dark rounded-xl p-5 sm:p-6 space-y-5">
@@ -214,164 +241,77 @@ export default function CheckoutPage() {
                     <Icon name="MapPinIcon" size={18} className="text-primary" />
                     Delivery Address
                   </h2>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* First name */}
-                    <div>
-                      <label htmlFor="firstName" className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">
-                        First Name *
-                      </label>
-                      <input
-                        id="firstName"
-                        type="text"
-                        value={form.firstName}
-                        onChange={(e) => handleFormChange('firstName', e.target.value)}
-                        placeholder="Amara"
-                        className={`input-dark ${formErrors.firstName ? 'border-red-500' : ''}`}
-                        aria-describedby={formErrors.firstName ? 'firstName-error' : undefined}
-                        autoComplete="given-name"
-                      />
-                      {formErrors.firstName && (
-                        <p id="firstName-error" className="text-xs text-red-400 mt-1" role="alert">{formErrors.firstName}</p>
-                      )}
-                    </div>
-
-                    {/* Last name */}
-                    <div>
-                      <label htmlFor="lastName" className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">
-                        Last Name *
-                      </label>
-                      <input
-                        id="lastName"
-                        type="text"
-                        value={form.lastName}
-                        onChange={(e) => handleFormChange('lastName', e.target.value)}
-                        placeholder="Osei"
-                        className={`input-dark ${formErrors.lastName ? 'border-red-500' : ''}`}
-                        aria-describedby={formErrors.lastName ? 'lastName-error' : undefined}
-                        autoComplete="family-name"
-                      />
-                      {formErrors.lastName && (
-                        <p id="lastName-error" className="text-xs text-red-400 mt-1" role="alert">{formErrors.lastName}</p>
-                      )}
-                    </div>
-
-                    {/* Email */}
-                    <div>
-                      <label htmlFor="email" className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">
-                        Email Address *
-                      </label>
-                      <input
-                        id="email"
-                        type="email"
-                        value={form.email}
-                        onChange={(e) => handleFormChange('email', e.target.value)}
-                        placeholder="amara@example.com"
-                        className={`input-dark ${formErrors.email ? 'border-red-500' : ''}`}
-                        aria-describedby={formErrors.email ? 'email-error' : undefined}
-                        autoComplete="email"
-                      />
-                      {formErrors.email && (
-                        <p id="email-error" className="text-xs text-red-400 mt-1" role="alert">{formErrors.email}</p>
-                      )}
-                    </div>
-
-                    {/* Phone */}
-                    <div>
-                      <label htmlFor="phone" className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">
-                        Phone Number *
-                      </label>
-                      <input
-                        id="phone"
-                        type="tel"
-                        value={form.phone}
-                        onChange={(e) => handleFormChange('phone', e.target.value)}
-                        placeholder="0712 345 678"
-                        className={`input-dark ${formErrors.phone ? 'border-red-500' : ''}`}
-                        aria-describedby={formErrors.phone ? 'phone-error' : undefined}
-                        autoComplete="tel"
-                      />
-                      {formErrors.phone && (
-                        <p id="phone-error" className="text-xs text-red-400 mt-1" role="alert">{formErrors.phone}</p>
-                      )}
-                    </div>
-
-                    {/* Address */}
+                    {[
+                      { field: 'firstName' as const, label: 'First Name', placeholder: 'Amara', type: 'text' },
+                      { field: 'lastName' as const, label: 'Last Name', placeholder: 'Osei', type: 'text' },
+                      { field: 'email' as const, label: 'Email', placeholder: 'your@email.com', type: 'email' },
+                      { field: 'phone' as const, label: 'Phone', placeholder: '0712345678', type: 'tel' },
+                    ].map(({ field, label, placeholder, type }) => (
+                      <div key={field}>
+                        <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">{label} *</label>
+                        <input
+                          type={type}
+                          value={form[field] as string}
+                          onChange={(e) => handleFormChange(field, e.target.value)}
+                          placeholder={placeholder}
+                          className={`input-dark ${formErrors[field] ? 'border-red-500' : ''}`}
+                        />
+                        {formErrors[field] && <p className="text-xs text-red-400 mt-1">{formErrors[field]}</p>}
+                      </div>
+                    ))}
                     <div className="sm:col-span-2">
-                      <label htmlFor="address" className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">
-                        Street Address *
-                      </label>
+                      <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">Street Address *</label>
                       <input
-                        id="address"
                         type="text"
                         value={form.address}
                         onChange={(e) => handleFormChange('address', e.target.value)}
-                        placeholder="123 Ngong Road, Apartment 4B"
+                        placeholder="123 Kenyatta Avenue, Apt 4B"
                         className={`input-dark ${formErrors.address ? 'border-red-500' : ''}`}
-                        aria-describedby={formErrors.address ? 'address-error' : undefined}
-                        autoComplete="street-address"
                       />
-                      {formErrors.address && (
-                        <p id="address-error" className="text-xs text-red-400 mt-1" role="alert">{formErrors.address}</p>
-                      )}
+                      {formErrors.address && <p className="text-xs text-red-400 mt-1">{formErrors.address}</p>}
                     </div>
-
-                    {/* City */}
                     <div>
-                      <label htmlFor="city" className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">
-                        City *
-                      </label>
+                      <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">City *</label>
                       <input
-                        id="city"
                         type="text"
                         value={form.city}
                         onChange={(e) => handleFormChange('city', e.target.value)}
                         placeholder="Nairobi"
                         className={`input-dark ${formErrors.city ? 'border-red-500' : ''}`}
-                        aria-describedby={formErrors.city ? 'city-error' : undefined}
-                        autoComplete="address-level2"
                       />
-                      {formErrors.city && (
-                        <p id="city-error" className="text-xs text-red-400 mt-1" role="alert">{formErrors.city}</p>
-                      )}
+                      {formErrors.city && <p className="text-xs text-red-400 mt-1">{formErrors.city}</p>}
                     </div>
-
-                    {/* County */}
                     <div>
-                      <label htmlFor="county" className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">
-                        County *
-                      </label>
+                      <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">County *</label>
                       <select
-                        id="county"
                         value={form.county}
                         onChange={(e) => handleFormChange('county', e.target.value)}
                         className={`input-dark ${formErrors.county ? 'border-red-500' : ''}`}
-                        aria-describedby={formErrors.county ? 'county-error' : undefined}
-                        autoComplete="address-level1"
                       >
-                        <option value="" className="bg-kili-elevated">Select county</option>
-                        {KENYAN_COUNTIES.map((c) => (
-                          <option key={c} value={c} className="bg-kili-elevated">{c}</option>
-                        ))}
+                        <option value="">Select county</option>
+                        {KENYAN_COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      {formErrors.county && (
-                        <p id="county-error" className="text-xs text-red-400 mt-1" role="alert">{formErrors.county}</p>
-                      )}
+                      {formErrors.county && <p className="text-xs text-red-400 mt-1">{formErrors.county}</p>}
                     </div>
-
-                    {/* Notes */}
-                    <div className="sm:col-span-2">
-                      <label htmlFor="notes" className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">
-                        Delivery Notes (Optional)
-                      </label>
-                      <textarea
-                        id="notes"
-                        value={form.notes}
+                    <div>
+                      <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">Postal Code</label>
+                      <input
+                        type="text"
+                        value={form.postalCode}
+                        onChange={(e) => handleFormChange('postalCode', e.target.value)}
+                        placeholder="00100"
+                        className="input-dark"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">Order Notes</label>
+                      <input
+                        type="text"
+                        value={form.notes || ''}
                         onChange={(e) => handleFormChange('notes', e.target.value)}
-                        placeholder="Any special instructions for delivery..."
-                        rows={3}
-                        className="input-dark resize-none"
-                        autoComplete="off"
+                        placeholder="Special delivery instructions..."
+                        className="input-dark"
                       />
                     </div>
                   </div>
@@ -385,210 +325,61 @@ export default function CheckoutPage() {
                     <Icon name="CreditCardIcon" size={18} className="text-primary" />
                     Payment Method
                   </h2>
-
-                  <div className="space-y-3" role="radiogroup" aria-label="Payment methods">
-                    {/* M-Pesa */}
-                    <label
-                      className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        paymentMethod === 'mpesa' ?'border-primary bg-primary/5' :'border-kili-border hover:border-kili-muted'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="payment"
-                        value="mpesa"
-                        checked={paymentMethod === 'mpesa'}
-                        onChange={() => setPaymentMethod('mpesa')}
-                        className="mt-1 accent-primary"
-                        aria-label="Pay with M-Pesa"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-lg">📱</span>
-                          <span className="text-sm font-semibold text-kili-fg">M-Pesa</span>
-                          <span className="badge-new text-xs">Popular</span>
+                  <div className="space-y-3">
+                    {[
+                      { value: 'mpesa' as const, label: 'M-Pesa', desc: 'Pay via M-Pesa mobile money', icon: '📱' },
+                      { value: 'card' as const, label: 'Credit/Debit Card', desc: 'Visa, Mastercard, etc.', icon: '💳' },
+                      { value: 'cod' as const, label: 'Cash on Delivery', desc: 'Pay when you receive', icon: '💵' },
+                    ].map((method) => (
+                      <label key={method.value} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${paymentMethod === method.value ? 'border-primary bg-primary/5' : 'border-kili-border hover:border-kili-muted'}`}>
+                        <input type="radio" name="payment" value={method.value} checked={paymentMethod === method.value} onChange={() => setPaymentMethod(method.value)} className="sr-only" />
+                        <span className="text-2xl">{method.icon}</span>
+                        <div className="flex-1">
+                          <p className="font-medium text-kili-fg">{method.label}</p>
+                          <p className="text-xs text-kili-muted">{method.desc}</p>
                         </div>
-                        <p className="text-xs text-kili-muted">
-                          Pay securely via M-Pesa. You will receive an STK push to complete payment.
-                        </p>
-                        {paymentMethod === 'mpesa' && (
-                          <div className="mt-3">
-                            <label htmlFor="mpesa-phone" className="text-xs text-kili-muted block mb-1.5">
-                              M-Pesa Phone Number
-                            </label>
-                            <input
-                              id="mpesa-phone"
-                              type="tel"
-                              defaultValue={form.phone}
-                              placeholder="0712 345 678"
-                              className="input-dark text-sm py-2"
-                              aria-label="M-Pesa phone number"
-                            />
-                            <p className="text-xs text-kili-subtle mt-1">
-                              Ensure this is your registered M-Pesa number
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </label>
-
-                    {/* Card */}
-                    <label
-                      className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        paymentMethod === 'card' ?'border-primary bg-primary/5' :'border-kili-border hover:border-kili-muted'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="payment"
-                        value="card"
-                        checked={paymentMethod === 'card'}
-                        onChange={() => setPaymentMethod('card')}
-                        className="mt-1 accent-primary"
-                        aria-label="Pay with credit or debit card"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-lg">💳</span>
-                          <span className="text-sm font-semibold text-kili-fg">Credit / Debit Card</span>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === method.value ? 'border-primary' : 'border-kili-border'}`}>
+                          {paymentMethod === method.value && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
                         </div>
-                        <p className="text-xs text-kili-muted">
-                          Visa, Mastercard accepted. Secure 3D authentication.
-                        </p>
-                        {paymentMethod === 'card' && (
-                          <div className="mt-3 space-y-3">
-                            <input
-                              type="text"
-                              placeholder="Card number (e.g. 4111 1111 1111 1111)"
-                              className="input-dark text-sm py-2"
-                              aria-label="Card number"
-                            />
-                            <div className="grid grid-cols-2 gap-3">
-                              <input
-                                type="text"
-                                placeholder="MM / YY"
-                                className="input-dark text-sm py-2"
-                                aria-label="Card expiry date"
-                              />
-                              <input
-                                type="text"
-                                placeholder="CVV"
-                                className="input-dark text-sm py-2"
-                                aria-label="Card CVV"
-                              />
-                            </div>
-                            <p className="text-xs text-kili-subtle flex items-center gap-1">
-                              <Icon name="LockClosedIcon" size={12} />
-                              Payment gateway integration ready (Flutterwave / Stripe)
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </label>
-
-                    {/* Cash on Delivery */}
-                    <label
-                      className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        paymentMethod === 'cod' ?'border-primary bg-primary/5' :'border-kili-border hover:border-kili-muted'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="payment"
-                        value="cod"
-                        checked={paymentMethod === 'cod'}
-                        onChange={() => setPaymentMethod('cod')}
-                        className="mt-1 accent-primary"
-                        aria-label="Pay cash on delivery"
-                      />
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-lg">💵</span>
-                          <span className="text-sm font-semibold text-kili-fg">Cash on Delivery</span>
-                        </div>
-                        <p className="text-xs text-kili-muted">
-                          Pay with cash when your order arrives. Available in Nairobi only.
-                        </p>
-                      </div>
-                    </label>
+                      </label>
+                    ))}
                   </div>
                 </div>
               )}
 
               {/* STEP 3: Review */}
               {step === 'review' && (
-                <div className="space-y-4">
-                  {/* Delivery summary */}
-                  <div className="card-dark rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <h2 className="text-sm font-semibold text-kili-fg flex items-center gap-2">
-                        <Icon name="MapPinIcon" size={16} className="text-primary" />
-                        Delivery To
-                      </h2>
-                      <button
-                        onClick={() => setStep('delivery')}
-                        className="text-xs text-primary hover:text-primary-light transition-colors"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div className="text-sm text-kili-muted space-y-0.5">
-                      <p className="text-kili-fg font-medium">{form.firstName} {form.lastName}</p>
-                      <p>{form.address}</p>
-                      <p>{form.city}, {form.county}</p>
-                      <p>{form.phone}</p>
-                    </div>
-                  </div>
-
-                  {/* Payment summary */}
-                  <div className="card-dark rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <h2 className="text-sm font-semibold text-kili-fg flex items-center gap-2">
-                        <Icon name="CreditCardIcon" size={16} className="text-primary" />
-                        Payment Method
-                      </h2>
-                      <button
-                        onClick={() => setStep('payment')}
-                        className="text-xs text-primary hover:text-primary-light transition-colors"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <p className="text-sm text-kili-muted capitalize">
-                      {paymentMethod === 'mpesa' ? '📱 M-Pesa' : paymentMethod === 'card' ? '💳 Credit/Debit Card' : '💵 Cash on Delivery'}
-                    </p>
-                  </div>
-
-                  {/* Items summary */}
-                  <div className="card-dark rounded-xl p-5">
-                    <h2 className="text-sm font-semibold text-kili-fg mb-3">
-                      Order Items ({orderItems.length})
-                    </h2>
-                    <div className="space-y-3">
-                      {orderItems.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-3">
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-12 h-12 rounded-lg object-cover bg-kili-elevated"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-kili-fg line-clamp-1">{item.name}</p>
-                            <p className="text-xs text-kili-subtle">Qty: {item.qty}</p>
-                          </div>
-                          <span className="text-sm font-medium text-kili-fg shrink-0">
-                            {formatPrice(item.price * item.qty)}
-                          </span>
+                <div className="card-dark rounded-xl p-5 sm:p-6 space-y-5">
+                  <h2 className="text-base font-semibold text-kili-fg">Review Your Order</h2>
+                  <div className="space-y-3">
+                    {cartItems.map((item) => (
+                      <div key={item.id} className="flex items-center gap-3 py-2 border-b border-kili-border last:border-0">
+                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-kili-elevated shrink-0">
+                          <AppImage src={item.product?.imageUrl || ''} alt={item.product?.name || ''} width={48} height={48} className="w-full h-full object-cover" />
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-kili-fg line-clamp-1">{item.product?.name}</p>
+                          <p className="text-xs text-kili-muted">Qty: {item.quantity}</p>
+                        </div>
+                        <p className="text-sm font-semibold text-kili-fg shrink-0">{formatPrice((item.product?.price || 0) * item.quantity)}</p>
+                      </div>
+                    ))}
                   </div>
+                  <div className="p-4 bg-kili-elevated rounded-xl space-y-2 text-sm">
+                    <p className="font-medium text-kili-fg">Delivery to:</p>
+                    <p className="text-kili-muted">{form.firstName} {form.lastName}</p>
+                    <p className="text-kili-muted">{form.address}, {form.city}, {form.county}</p>
+                    <p className="text-kili-muted">{form.phone}</p>
+                  </div>
+                  {orderError && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">{orderError}</div>
+                  )}
                 </div>
               )}
 
               {/* Navigation buttons */}
-              <div className="flex items-center justify-between pt-2">
-                {step !== 'delivery' ? (
+              <div className="flex gap-3">
+                {step !== 'delivery' && (
                   <button
                     onClick={handleBack}
                     className="btn-secondary py-2.5 px-5"
@@ -596,91 +387,56 @@ export default function CheckoutPage() {
                     <Icon name="ArrowLeftIcon" size={16} />
                     Back
                   </button>
-                ) : (
-                  <Link href="/cart" className="btn-secondary py-2.5 px-5">
-                    <Icon name="ArrowLeftIcon" size={16} />
-                    Back to Cart
-                  </Link>
                 )}
-
                 <button
                   onClick={handleNext}
-                  className="btn-primary py-2.5 px-6"
+                  disabled={placingOrder}
+                  className="btn-primary flex-1 justify-center py-2.5"
                 >
-                  {step === 'review' ? (
-                    <>
-                      <Icon name="CheckIcon" size={16} />
-                      Place Order
-                    </>
+                  {placingOrder ? (
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : step === 'review' ? (
+                    <><Icon name="CheckIcon" size={16} />Place Order</>
                   ) : (
-                    <>
-                      Continue
-                      <Icon name="ArrowRightIcon" size={16} />
-                    </>
+                    <>Continue <Icon name="ArrowRightIcon" size={16} /></>
                   )}
                 </button>
               </div>
             </div>
 
-            {/* Right: Order summary */}
+            {/* Order summary sidebar */}
             <div className="lg:col-span-1">
               <div className="card-dark rounded-xl p-5 sticky top-24 space-y-4">
                 <h2 className="text-base font-semibold text-kili-fg">Order Summary</h2>
-
-                {/* Items */}
-                <div className="space-y-3 max-h-48 overflow-y-auto">
-                  {orderItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-3">
-                      <div className="relative">
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-12 h-12 rounded-lg object-cover bg-kili-elevated"
-                        />
-                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-kili-elevated border border-kili-border text-xs text-kili-muted flex items-center justify-center font-medium">
-                          {item.qty}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-kili-fg line-clamp-2">{item.name}</p>
-                      </div>
-                      <span className="text-xs font-medium text-kili-fg shrink-0">
-                        {formatPrice(item.price * item.qty)}
-                      </span>
+                <div className="space-y-2 text-sm">
+                  {cartItems.map((item) => (
+                    <div key={item.id} className="flex justify-between text-kili-muted">
+                      <span className="line-clamp-1 flex-1 mr-2">{item.product?.name} × {item.quantity}</span>
+                      <span className="shrink-0">{formatPrice((item.product?.price || 0) * item.quantity)}</span>
                     </div>
                   ))}
                 </div>
-
                 <div className="divider" />
-
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-kili-muted">
                     <span>Subtotal</span>
-                    <span className="text-kili-fg">{formatPrice(subtotal)}</span>
+                    <span>{formatPrice(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-kili-muted">
                     <span>Shipping</span>
-                    <span className="text-green-400">FREE</span>
+                    <span className={shipping === 0 ? 'text-green-400' : ''}>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
                   </div>
                 </div>
-
                 <div className="divider" />
-
-                <div className="flex justify-between items-center">
-                  <span className="text-base font-semibold text-kili-fg">Total</span>
-                  <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs text-kili-subtle bg-kili-elevated rounded-lg px-3 py-2">
-                  <Icon name="ShieldCheckIcon" size={14} className="text-green-400 shrink-0" />
-                  Secure checkout. Your data is protected.
+                <div className="flex justify-between font-semibold text-kili-fg">
+                  <span>Total</span>
+                  <span className="text-primary text-lg">{formatPrice(total)}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </main>
-
       <Footer />
     </div>
   );

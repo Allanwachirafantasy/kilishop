@@ -1,77 +1,138 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
 import ProductCard from '@/app/homepage/components/ProductCard';
 import { StarRating } from '@/app/homepage/components/ProductCard';
-import { PRODUCTS, REVIEWS, formatPrice } from '@/lib/sampleData';
+import {
+  getProductById, getRelatedProducts, getProductReviews, addToCart, addToWishlist,
+  isInWishlist, addReview, formatPrice, getStockStatus,
+  type Product, type Review
+} from '@/lib/supabase/services';
+import { useAuth } from '@/contexts/AuthContext';
 
-const product = PRODUCTS[0]; // Samsung Galaxy A54 as default detail product
-const relatedProducts = PRODUCTS.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
-const productReviews = REVIEWS.filter((r) => r.productId === product.id);
+function ProductDetailContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const productId = searchParams.get('id');
+  const { user } = useAuth();
 
-const RatingBreakdown: React.FC<{ rating: number; count: number; total: number }> = ({ rating, count, total }) => {
-  const pct = total > 0 ? (count / total) * 100 : 0;
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-kili-muted w-6 text-right">{rating}</span>
-      <svg width="12" height="12" viewBox="0 0 20 20" fill="#FFB800" aria-hidden="true">
-        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-      </svg>
-      <div className="flex-1 h-1.5 bg-kili-elevated rounded-full overflow-hidden">
-        <div
-          className="h-full bg-accent rounded-full transition-all duration-500"
-          style={{ width: `${pct}%` }}
-          role="progressbar"
-          aria-valuenow={Math.round(pct)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`${rating} star rating: ${Math.round(pct)}%`}
-        />
-      </div>
-      <span className="text-xs text-kili-subtle w-8">{count}</span>
-    </div>
-  );
-};
-
-export default function ProductDetailPage() {
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [wishlisted, setWishlisted] = useState(false);
+  const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
   const [addedToCart, setAddedToCart] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
   const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'reviews'>('description');
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewMsg, setReviewMsg] = useState('');
 
-  const images = product.images ?? [product.image];
+  useEffect(() => {
+    if (!productId) {
+      router.replace('/product-listing');
+      return;
+    }
+    setLoading(true);
+    getProductById(productId).then(async (p) => {
+      if (!p) { router.replace('/product-listing'); return; }
+      setProduct(p);
+      if (p.categoryId) {
+        const [related, revs] = await Promise.all([
+          getRelatedProducts(p.categoryId, p.id, 4),
+          getProductReviews(p.id),
+        ]);
+        setRelatedProducts(related);
+        setReviews(revs);
+      }
+      if (user) {
+        const wId = await isInWishlist(user.id, p.id);
+        setWishlistItemId(wId);
+      }
+    }).finally(() => setLoading(false));
+  }, [productId, user, router]);
 
-  const handleAddToCart = () => {
-    setAddedToCart(true);
-    setTimeout(() => setAddedToCart(false), 2000);
+  const handleAddToCart = async () => {
+    if (!user) { router.push('/login'); return; }
+    if (!product) return;
+    setAddingToCart(true);
+    try {
+      await addToCart(user.id, product.id, quantity);
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to add to cart');
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
-  const ratingBreakdown = [
-    { rating: 5, count: Math.round(product.reviewCount * 0.55) },
-    { rating: 4, count: Math.round(product.reviewCount * 0.25) },
-    { rating: 3, count: Math.round(product.reviewCount * 0.12) },
-    { rating: 2, count: Math.round(product.reviewCount * 0.05) },
-    { rating: 1, count: Math.round(product.reviewCount * 0.03) },
-  ];
+  const handleWishlist = async () => {
+    if (!user) { router.push('/login'); return; }
+    if (!product) return;
+    if (!wishlistItemId) {
+      await addToWishlist(user.id, product.id);
+      const wId = await isInWishlist(user.id, product.id);
+      setWishlistItemId(wId);
+    }
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !product) { router.push('/login'); return; }
+    setSubmittingReview(true);
+    try {
+      await addReview(product.id, user.id, reviewForm.rating, reviewForm.comment);
+      const revs = await getProductReviews(product.id);
+      setReviews(revs);
+      setReviewMsg('Review submitted successfully!');
+      setReviewForm({ rating: 5, comment: '' });
+    } catch {
+      setReviewMsg('Failed to submit review. You may have already reviewed this product.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-kili-bg">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <span className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!product) return null;
+
+  const images = product.images?.length ? product.images : [product.imageUrl];
+  const stockStatus = getStockStatus(product.stock);
+  const ratingBreakdown = [5, 4, 3, 2, 1].map((r) => ({
+    rating: r,
+    count: reviews.filter((rev) => rev.rating === r).length,
+  }));
 
   return (
     <div className="min-h-screen flex flex-col bg-kili-bg">
-      <Header cartCount={3} />
-
+      <Header />
       <main className="flex-1">
-        {/* Breadcrumb */}
         <div className="border-b border-kili-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
             <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-kili-subtle flex-wrap">
               <Link href="/homepage" className="hover:text-primary transition-colors">Home</Link>
               <Icon name="ChevronRightIcon" size={14} />
-              <Link href="/product-listing" className="hover:text-primary transition-colors capitalize">
-                {product.category}
+              <Link href={`/product-listing?category=${product.category?.slug || ''}`} className="hover:text-primary transition-colors capitalize">
+                {product.category?.name || 'Products'}
               </Link>
               <Icon name="ChevronRightIcon" size={14} />
               <span className="text-kili-fg line-clamp-1">{product.name}</span>
@@ -80,60 +141,42 @@ export default function ProductDetailPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          {/* Main product section */}
           <div className="grid md:grid-cols-2 gap-8 lg:gap-12 mb-12">
             {/* Image gallery */}
             <div className="space-y-3">
-              {/* Main image */}
               <div className="relative rounded-xl overflow-hidden border border-kili-border bg-kili-elevated aspect-[4/3]">
                 <AppImage
-                  src={images[selectedImage]}
-                  alt={`${product.name} — main product image showing device from front angle on dark background`}
+                  src={images[selectedImage] || ''}
+                  alt={`${product.name} — main product image`}
                   fill
                   priority
                   sizes="(max-width: 768px) 100vw, 50vw"
                   className="object-cover"
                 />
-                {/* Badges */}
                 <div className="absolute top-3 left-3 flex flex-col gap-2">
-                  {product.discount && (
+                  {product.discount && product.discount > 0 && (
                     <span className="badge-deal">{product.discount}% OFF</span>
                   )}
-                  {product.isNew && (
-                    <span className="badge-new">NEW</span>
-                  )}
+                  {product.isNew && <span className="badge-new">NEW</span>}
                 </div>
-                {/* Wishlist */}
                 <button
-                  className={`wishlist-btn absolute top-3 right-3 w-10 h-10 ${wishlisted ? 'active' : ''}`}
-                  onClick={() => setWishlisted(!wishlisted)}
-                  aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-                  aria-pressed={wishlisted}
+                  className={`wishlist-btn absolute top-3 right-3 w-10 h-10 ${wishlistItemId ? 'active' : ''}`}
+                  onClick={handleWishlist}
+                  aria-label={wishlistItemId ? 'Remove from wishlist' : 'Add to wishlist'}
                 >
-                  <Icon name="HeartIcon" variant={wishlisted ? 'solid' : 'outline'} size={18} />
+                  <Icon name="HeartIcon" variant={wishlistItemId ? 'solid' : 'outline'} size={18} />
                 </button>
               </div>
-
-              {/* Thumbnails */}
               {images.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-1" role="list" aria-label="Product image thumbnails">
+                <div className="flex gap-2 overflow-x-auto pb-1">
                   {images.map((img, idx) => (
                     <button
                       key={idx}
-                      role="listitem"
                       onClick={() => setSelectedImage(idx)}
-                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                        selectedImage === idx
-                          ? 'border-primary' :'border-kili-border hover:border-kili-muted'
-                      }`}
+                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${selectedImage === idx ? 'border-primary' : 'border-kili-border hover:border-kili-muted'}`}
                       aria-label={`View image ${idx + 1}`}
-                      aria-pressed={selectedImage === idx}
                     >
-                      <img
-                        src={img}
-                        alt={`${product.name} thumbnail ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={img} alt={`${product.name} thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -142,40 +185,25 @@ export default function ProductDetailPage() {
 
             {/* Product info */}
             <div className="space-y-5">
-              {/* Brand + title */}
               <div>
                 <p className="text-sm text-primary font-medium mb-1">{product.brand}</p>
-                <h1 className="text-xl sm:text-2xl font-display font-semibold text-kili-fg leading-snug">
-                  {product.name}
-                </h1>
+                <h1 className="text-xl sm:text-2xl font-display font-semibold text-kili-fg leading-snug">{product.name}</h1>
               </div>
 
-              {/* Rating row */}
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <StarRating rating={product.rating} size="md" />
-                  <span className="text-sm font-semibold text-kili-fg">{product.rating}</span>
+                  <span className="text-sm font-semibold text-kili-fg">{product.rating.toFixed(1)}</span>
                 </div>
-                <span className="text-sm text-kili-subtle">
-                  ({product.reviewCount.toLocaleString()} reviews)
-                </span>
-                <span className="text-sm text-kili-subtle">
-                  {product.sold.toLocaleString()} sold
-                </span>
-                <span
-                  className={`status-badge ${product.stock > 0 ? 'status-delivered' : 'status-pending'}`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${product.stock > 0 ? 'bg-green-500' : 'bg-yellow-500'}`}
-                    aria-hidden="true"
-                  />
-                  {product.stock > 0 ? `In Stock (${product.stock} left)` : 'Out of Stock'}
+                <span className="text-sm text-kili-subtle">({product.reviewCount.toLocaleString()} reviews)</span>
+                <span className="text-sm text-kili-subtle">{product.sold.toLocaleString()} sold</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${stockStatus.color}`}>
+                  {stockStatus.label}
                 </span>
               </div>
 
               <div className="divider" />
 
-              {/* Price */}
               <div className="space-y-1">
                 <div className="flex items-baseline gap-3">
                   <span className="text-3xl font-bold text-primary">{formatPrice(product.price)}</span>
@@ -183,236 +211,166 @@ export default function ProductDetailPage() {
                     <span className="text-lg text-kili-subtle line-through">{formatPrice(product.originalPrice)}</span>
                   )}
                 </div>
-                {product.discount && (
+                {product.discount && product.originalPrice && (
                   <p className="text-sm text-green-400 font-medium">
-                    You save {formatPrice(product.originalPrice! - product.price)} ({product.discount}% off)
+                    You save {formatPrice(product.originalPrice - product.price)} ({product.discount}% off)
                   </p>
                 )}
               </div>
 
               <div className="divider" />
 
-              {/* Quantity */}
               <div className="flex items-center gap-4">
                 <span className="text-sm font-medium text-kili-fg">Quantity:</span>
                 <div className="flex items-center gap-2">
-                  <button
-                    className="qty-btn"
-                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    disabled={quantity <= 1}
-                    aria-label="Decrease quantity"
-                  >
-                    −
-                  </button>
-                  <span
-                    className="w-10 text-center text-sm font-semibold text-kili-fg"
-                    aria-live="polite"
-                    aria-label={`Quantity: ${quantity}`}
-                  >
-                    {quantity}
-                  </span>
-                  <button
-                    className="qty-btn"
-                    onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
-                    disabled={quantity >= product.stock}
-                    aria-label="Increase quantity"
-                  >
-                    +
-                  </button>
+                  <button className="qty-btn" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1} aria-label="Decrease quantity">−</button>
+                  <span className="w-10 text-center text-sm font-semibold text-kili-fg">{quantity}</span>
+                  <button className="qty-btn" onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))} disabled={quantity >= product.stock} aria-label="Increase quantity">+</button>
                 </div>
                 <span className="text-xs text-kili-subtle">Max {product.stock}</span>
               </div>
 
-              {/* Action buttons */}
               <div className="flex flex-col xs:flex-row gap-3">
                 <button
                   className={`btn-primary flex-1 justify-center py-3 ${addedToCart ? 'bg-green-600' : ''}`}
                   onClick={handleAddToCart}
-                  disabled={product.stock === 0}
-                  aria-label={addedToCart ? 'Added to cart' : 'Add to cart'}
+                  disabled={product.stock === 0 || addingToCart}
                 >
                   {addedToCart ? (
-                    <>
-                      <Icon name="CheckIcon" size={18} />
-                      Added to Cart!
-                    </>
+                    <><Icon name="CheckIcon" size={18} />Added to Cart!</>
+                  ) : addingToCart ? (
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <>
-                      <Icon name="ShoppingCartIcon" size={18} />
-                      Add to Cart
-                    </>
+                    <><Icon name="ShoppingCartIcon" size={18} />Add to Cart</>
                   )}
                 </button>
-                <Link
-                  href="/checkout"
-                  className="btn-secondary flex-1 justify-center py-3"
-                >
-                  Buy Now
-                </Link>
+                <Link href="/checkout" className="btn-secondary flex-1 justify-center py-3">Buy Now</Link>
               </div>
 
-              {/* Delivery info */}
-              <div className="rounded-xl border border-kili-border bg-kili-elevated p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <Icon name="TruckIcon" size={18} className="text-primary shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-kili-fg">Free Delivery</p>
-                    <p className="text-xs text-kili-muted">Orders over KSh 2,000 qualify for free delivery. Est. 1-3 days.</p>
+              <div className="grid grid-cols-3 gap-3 pt-2">
+                {[
+                  { icon: '🚚', text: 'Free delivery over KSh 2,000' },
+                  { icon: '↩️', text: '7-day easy returns' },
+                  { icon: '🔒', text: 'Secure payment' },
+                ].map((item) => (
+                  <div key={item.text} className="flex flex-col items-center gap-1 p-3 rounded-xl bg-kili-elevated border border-kili-border text-center">
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="text-xs text-kili-muted leading-tight">{item.text}</span>
                   </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Icon name="ArrowPathIcon" size={18} className="text-green-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-kili-fg">7-Day Returns</p>
-                    <p className="text-xs text-kili-muted">Return or exchange within 7 days of delivery. No questions asked.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Icon name="ShieldCheckIcon" size={18} className="text-blue-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-kili-fg">Genuine Product</p>
-                    <p className="text-xs text-kili-muted">100% authentic. All products verified before dispatch.</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Tabs: Description / Specs / Reviews */}
-          <div className="mb-12">
-            <div className="flex border-b border-kili-border overflow-x-auto" role="tablist" aria-label="Product information tabs">
+          {/* Tabs */}
+          <div className="mb-8">
+            <div className="flex border-b border-kili-border gap-1 mb-6">
               {(['description', 'specs', 'reviews'] as const).map((tab) => (
                 <button
                   key={tab}
-                  role="tab"
-                  aria-selected={activeTab === tab}
-                  className={`tab-btn capitalize ${activeTab === tab ? 'active' : ''}`}
                   onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors capitalize ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-kili-muted hover:text-kili-fg'}`}
                 >
-                  {tab === 'reviews' ? `Reviews (${product.reviewCount})` : tab}
+                  {tab === 'reviews' ? `Reviews (${reviews.length})` : tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
               ))}
             </div>
 
-            <div className="mt-6" role="tabpanel">
-              {activeTab === 'description' && (
-                <div className="max-w-3xl">
-                  <p className="text-kili-muted leading-relaxed text-sm sm:text-base">
-                    {product.description}
-                  </p>
-                  {product.tags && (
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      {product.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-3 py-1 rounded-full bg-kili-elevated border border-kili-border text-xs text-kili-muted"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+            {activeTab === 'description' && (
+              <div className="prose prose-invert max-w-none">
+                <p className="text-kili-muted leading-relaxed">{product.description}</p>
+              </div>
+            )}
 
-              {activeTab === 'specs' && product.specs && (
-                <div className="max-w-2xl">
-                  <div className="rounded-xl border border-kili-border overflow-hidden">
-                    {Object.entries(product.specs).map(([key, value], idx) => (
-                      <div
-                        key={key}
-                        className={`flex gap-4 px-4 py-3 text-sm ${idx % 2 === 0 ? 'bg-kili-card' : 'bg-kili-elevated'}`}
-                      >
-                        <span className="font-medium text-kili-muted w-36 shrink-0">{key}</span>
-                        <span className="text-kili-fg">{value}</span>
+            {activeTab === 'specs' && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {Object.entries(product.specs || {}).map(([key, value]) => (
+                  <div key={key} className="flex gap-3 p-3 rounded-xl bg-kili-elevated border border-kili-border">
+                    <span className="text-sm font-medium text-kili-muted w-32 shrink-0">{key}</span>
+                    <span className="text-sm text-kili-fg">{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'reviews' && (
+              <div className="space-y-6">
+                {/* Rating summary */}
+                <div className="flex gap-8 p-5 bg-kili-elevated border border-kili-border rounded-xl">
+                  <div className="text-center">
+                    <p className="text-5xl font-bold text-kili-fg">{product.rating.toFixed(1)}</p>
+                    <StarRating rating={product.rating} size="md" />
+                    <p className="text-xs text-kili-muted mt-1">{product.reviewCount} reviews</p>
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    {ratingBreakdown.map(({ rating: r, count }) => (
+                      <div key={r} className="flex items-center gap-2">
+                        <span className="text-xs text-kili-muted w-4">{r}</span>
+                        <div className="flex-1 h-1.5 bg-kili-card rounded-full overflow-hidden">
+                          <div className="h-full bg-accent rounded-full" style={{ width: reviews.length > 0 ? `${(count / reviews.length) * 100}%` : '0%' }} />
+                        </div>
+                        <span className="text-xs text-kili-subtle w-6">{count}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {activeTab === 'reviews' && (
-                <div className="max-w-3xl space-y-6">
-                  {/* Rating summary */}
-                  <div className="grid sm:grid-cols-2 gap-6 p-5 rounded-xl bg-kili-elevated border border-kili-border">
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="text-5xl font-bold text-kili-fg mb-1">{product.rating}</div>
-                      <StarRating rating={product.rating} size="md" />
-                      <p className="text-sm text-kili-muted mt-1">
-                        Based on {product.reviewCount.toLocaleString()} reviews
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {ratingBreakdown.map((rb) => (
-                        <RatingBreakdown
-                          key={rb.rating}
-                          rating={rb.rating}
-                          count={rb.count}
-                          total={product.reviewCount}
-                        />
+                {/* Review form */}
+                {user && (
+                  <form onSubmit={handleSubmitReview} className="p-5 bg-kili-elevated border border-kili-border rounded-xl space-y-4">
+                    <h3 className="font-semibold text-kili-fg">Write a Review</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-kili-muted">Rating:</span>
+                      {[1, 2, 3, 4, 5].map((r) => (
+                        <button key={r} type="button" onClick={() => setReviewForm((f) => ({ ...f, rating: r }))} className={`text-2xl ${r <= reviewForm.rating ? 'text-accent' : 'text-kili-border'}`}>★</button>
                       ))}
                     </div>
-                  </div>
+                    <textarea
+                      value={reviewForm.comment}
+                      onChange={(e) => setReviewForm((f) => ({ ...f, comment: e.target.value }))}
+                      placeholder="Share your experience with this product..."
+                      rows={3}
+                      className="input-dark resize-none"
+                    />
+                    {reviewMsg && <p className={`text-sm ${reviewMsg.includes('success') ? 'text-green-400' : 'text-red-400'}`}>{reviewMsg}</p>}
+                    <button type="submit" disabled={submittingReview} className="btn-primary py-2 px-4 text-sm">
+                      {submittingReview ? 'Submitting...' : 'Submit Review'}
+                    </button>
+                  </form>
+                )}
 
-                  {/* Review list */}
+                {/* Reviews list */}
+                {reviews.length === 0 ? (
+                  <p className="text-center text-kili-muted py-8">No reviews yet. Be the first to review!</p>
+                ) : (
                   <div className="space-y-4">
-                    {productReviews.length > 0 ? (
-                      productReviews.map((review) => (
-                        <div key={review.id} className="p-4 rounded-xl bg-kili-card border border-kili-border">
-                          <div className="flex items-start gap-3 mb-3">
-                            <img
-                              src={review.avatar}
-                              alt={`${review.userName} profile photo`}
-                              className="w-10 h-10 rounded-full object-cover shrink-0"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <span className="text-sm font-semibold text-kili-fg">{review.userName}</span>
-                                <span className="text-xs text-kili-subtle">
-                                  {new Date(review.date).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
-                                </span>
-                              </div>
-                              <StarRating rating={review.rating} />
-                            </div>
+                    {reviews.map((review) => (
+                      <div key={review.id} className="p-4 bg-kili-elevated border border-kili-border rounded-xl">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-primary text-xs font-bold">{review.userProfile?.fullName?.charAt(0) || 'U'}</span>
                           </div>
-                          <p className="text-sm text-kili-muted leading-relaxed">{review.comment}</p>
-                          <div className="flex items-center gap-2 mt-3">
-                            <button className="flex items-center gap-1 text-xs text-kili-subtle hover:text-primary transition-colors">
-                              <Icon name="HandThumbUpIcon" size={14} />
-                              Helpful ({review.helpful})
-                            </button>
+                          <div>
+                            <p className="text-sm font-medium text-kili-fg">{review.userProfile?.fullName || 'Customer'}</p>
+                            <p className="text-xs text-kili-muted">{new Date(review.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <div className="ml-auto">
+                            <StarRating rating={review.rating} />
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-kili-muted">
-                        <p>No reviews yet. Be the first to review this product!</p>
+                        <p className="text-sm text-kili-muted">{review.comment}</p>
                       </div>
-                    )}
+                    ))}
                   </div>
-
-                  {/* Write review CTA */}
-                  <div className="p-4 rounded-xl border border-dashed border-kili-border text-center">
-                    <p className="text-sm text-kili-muted mb-3">Share your experience with this product</p>
-                    <Link href="/login" className="btn-secondary text-sm py-2 px-5">
-                      Write a Review
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Related products */}
           {relatedProducts.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-xl font-display font-semibold text-kili-fg">Related Products</h2>
-                <Link href="/product-listing" className="text-sm text-primary hover:text-primary-light transition-colors flex items-center gap-1">
-                  View all
-                  <Icon name="ArrowRightIcon" size={14} />
-                </Link>
-              </div>
+              <h2 className="text-xl font-display font-semibold text-kili-fg mb-4">Related Products</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {relatedProducts.map((p) => (
                   <ProductCard key={p.id} product={p} />
@@ -422,8 +380,21 @@ export default function ProductDetailPage() {
           )}
         </div>
       </main>
-
       <Footer />
     </div>
+  );
+}
+
+export default function ProductDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col bg-kili-bg">
+        <div className="flex-1 flex items-center justify-center">
+          <span className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      </div>
+    }>
+      <ProductDetailContent />
+    </Suspense>
   );
 }

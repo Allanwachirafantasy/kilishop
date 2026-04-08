@@ -1,14 +1,30 @@
 'use client';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Icon from '@/components/ui/AppIcon';
 import AppLogo from '@/components/ui/AppLogo';
+import { getAllOrders, updateOrderStatus, formatPrice, type Order } from '@/lib/supabase/services';
+
+const STATUS_OPTIONS: Order['status'][] = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+
+const statusColors: Record<string, string> = {
+  delivered: 'bg-green-400/10 text-green-400',
+  processing: 'bg-yellow-400/10 text-yellow-400',
+  shipped: 'bg-blue-400/10 text-blue-400',
+  pending: 'bg-orange-400/10 text-orange-400',
+  cancelled: 'bg-red-400/10 text-red-400',
+};
 
 export default function AdminOrdersPage() {
   const { user, isAdmin, loading, signOut, profile } = useAuth();
   const router = useRouter();
+  const [orders, setOrders] = useState<(Order & { userEmail?: string; userName?: string })[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading) {
@@ -17,52 +33,52 @@ export default function AdminOrdersPage() {
     }
   }, [user, isAdmin, loading, router]);
 
+  useEffect(() => {
+    if (isAdmin) {
+      getAllOrders()
+        .then(setOrders)
+        .finally(() => setDataLoading(false));
+    }
+  }, [isAdmin]);
+
+  const handleStatusUpdate = async (orderId: string, status: Order['status']) => {
+    setUpdatingId(orderId);
+    try {
+      await updateOrderStatus(orderId, status);
+      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o));
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update status');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const filtered = orders.filter((o) => {
+    const matchSearch = !searchQuery ||
+      o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (o.userName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (o.userEmail || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchStatus = !filterStatus || o.status === filterStatus;
+    return matchSearch && matchStatus;
+  });
+
   if (loading || !profile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-kili-bg">
-        <span className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center bg-kili-bg"><span className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
   }
   if (!isAdmin) return null;
-
-  const orders = [
-    { id: '#KS-1042', customer: 'Amara Osei', email: 'amara@example.com', amount: 'KSh 4,500', date: 'Apr 8, 2026', status: 'Delivered' },
-    { id: '#KS-1041', customer: 'Fatima Diallo', email: 'fatima@example.com', amount: 'KSh 12,800', date: 'Apr 7, 2026', status: 'Processing' },
-    { id: '#KS-1040', customer: 'Kwame Mensah', email: 'kwame@example.com', amount: 'KSh 3,200', date: 'Apr 7, 2026', status: 'Shipped' },
-    { id: '#KS-1039', customer: 'Nkechi Adeyemi', email: 'nkechi@example.com', amount: 'KSh 7,650', date: 'Apr 6, 2026', status: 'Pending' },
-    { id: '#KS-1038', customer: 'Kofi Asante', email: 'kofi@example.com', amount: 'KSh 2,100', date: 'Apr 6, 2026', status: 'Cancelled' },
-  ];
-
-  const statusColors: Record<string, string> = {
-    Delivered: 'bg-green-400/10 text-green-400',
-    Processing: 'bg-yellow-400/10 text-yellow-400',
-    Shipped: 'bg-blue-400/10 text-blue-400',
-    Pending: 'bg-orange-400/10 text-orange-400',
-    Cancelled: 'bg-red-400/10 text-red-400',
-  };
 
   return (
     <div className="min-h-screen bg-kili-bg">
       <header className="bg-kili-card border-b border-kili-border sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
-            <Link href="/admin" className="flex items-center gap-2">
-              <AppLogo size={28} />
-              <span className="font-display font-semibold text-kili-fg">KiliShop</span>
-            </Link>
+            <Link href="/admin" className="flex items-center gap-2"><AppLogo size={28} /><span className="font-display font-semibold text-kili-fg">KiliShop</span></Link>
             <span className="text-kili-border">|</span>
             <span className="text-sm font-medium text-primary">Orders</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/admin" className="btn-secondary py-1.5 px-3 text-sm">
-              <Icon name="ArrowLeftIcon" size={15} />
-              Dashboard
-            </Link>
-            <button onClick={signOut} className="btn-secondary py-1.5 px-3 text-sm text-red-400">
-              <Icon name="ArrowRightOnRectangleIcon" size={15} />
-              Logout
-            </button>
+            <Link href="/admin" className="btn-secondary py-1.5 px-3 text-sm"><Icon name="ArrowLeftIcon" size={15} />Dashboard</Link>
+            <button onClick={signOut} className="btn-secondary py-1.5 px-3 text-sm text-red-400"><Icon name="ArrowRightOnRectangleIcon" size={15} />Logout</button>
           </div>
         </div>
       </header>
@@ -70,62 +86,74 @@ export default function AdminOrdersPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div>
           <h1 className="text-2xl font-display font-semibold text-kili-fg">Order Management</h1>
-          <p className="text-kili-muted text-sm mt-1">View and manage all customer orders</p>
+          <p className="text-kili-muted text-sm mt-1">{orders.length} total orders</p>
         </div>
 
         <div className="bg-kili-card border border-kili-border rounded-2xl overflow-hidden">
-          <div className="p-4 border-b border-kili-border flex items-center gap-3">
-            <div className="flex-1 relative">
+          <div className="p-4 border-b border-kili-border flex items-center gap-3 flex-wrap">
+            <div className="flex-1 relative min-w-48">
               <Icon name="MagnifyingGlassIcon" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-kili-muted" />
-              <input type="text" placeholder="Search orders..." className="input-dark pl-9 py-2 text-sm" />
+              <input type="text" placeholder="Search orders..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="input-dark pl-9 py-2 text-sm" />
             </div>
-            <select className="input-dark py-2 text-sm w-40">
-              <option>All Statuses</option>
-              <option>Pending</option>
-              <option>Processing</option>
-              <option>Shipped</option>
-              <option>Delivered</option>
-              <option>Cancelled</option>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-dark py-2 text-sm w-44">
+              <option value="">All Statuses</option>
+              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
             </select>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-kili-border">
-                  <th className="text-left px-4 py-3 text-kili-muted font-medium">Order ID</th>
-                  <th className="text-left px-4 py-3 text-kili-muted font-medium">Customer</th>
-                  <th className="text-left px-4 py-3 text-kili-muted font-medium">Amount</th>
-                  <th className="text-left px-4 py-3 text-kili-muted font-medium">Date</th>
-                  <th className="text-left px-4 py-3 text-kili-muted font-medium">Status</th>
-                  <th className="text-left px-4 py-3 text-kili-muted font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((o) => (
-                  <tr key={o.id} className="border-b border-kili-border last:border-0 hover:bg-kili-elevated transition-colors">
-                    <td className="px-4 py-3 font-medium text-primary">{o.id}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-kili-fg font-medium">{o.customer}</p>
-                      <p className="text-xs text-kili-muted">{o.email}</p>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-kili-fg">{o.amount}</td>
-                    <td className="px-4 py-3 text-kili-muted">{o.date}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[o.status] || ''}`}>
-                        {o.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button className="text-xs text-primary hover:text-primary-light transition-colors font-medium">
-                        Update Status
-                      </button>
-                    </td>
+          {dataLoading ? (
+            <div className="p-8 flex justify-center"><span className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /></div>
+          ) : filtered.length === 0 ? (
+            <div className="p-12 text-center text-kili-muted">
+              <Icon name="ClipboardDocumentListIcon" size={40} className="mx-auto mb-3 opacity-40" />
+              <p>No orders found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-kili-border">
+                    <th className="text-left px-4 py-3 text-kili-muted font-medium">Order ID</th>
+                    <th className="text-left px-4 py-3 text-kili-muted font-medium">Customer</th>
+                    <th className="text-left px-4 py-3 text-kili-muted font-medium">Amount</th>
+                    <th className="text-left px-4 py-3 text-kili-muted font-medium">Date</th>
+                    <th className="text-left px-4 py-3 text-kili-muted font-medium">Status</th>
+                    <th className="text-left px-4 py-3 text-kili-muted font-medium">Update Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((o) => (
+                    <tr key={o.id} className="border-b border-kili-border last:border-0 hover:bg-kili-elevated transition-colors">
+                      <td className="px-4 py-3 font-medium text-primary">#{o.orderNumber}</td>
+                      <td className="px-4 py-3">
+                        <p className="text-kili-fg font-medium">{o.userName || 'Customer'}</p>
+                        <p className="text-xs text-kili-muted">{o.userEmail || ''}</p>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-kili-fg">{formatPrice(o.total)}</td>
+                      <td className="px-4 py-3 text-kili-muted">{new Date(o.createdAt).toLocaleDateString()}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[o.status] || ''}`}>
+                          {o.status.charAt(0).toUpperCase() + o.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <select
+                          value={o.status}
+                          onChange={(e) => handleStatusUpdate(o.id, e.target.value as Order['status'])}
+                          disabled={updatingId === o.id}
+                          className="input-dark py-1 text-xs w-36"
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </main>
     </div>
