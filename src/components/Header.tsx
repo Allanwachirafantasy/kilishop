@@ -4,18 +4,19 @@ import Link from 'next/link';
 import AppLogo from '@/components/ui/AppLogo';
 import Icon from '@/components/ui/AppIcon';
 import { useAuth } from '@/contexts/AuthContext';
+import { getCartCount } from '@/lib/supabase/services';
 
 interface HeaderProps {
-  cartCount?: number;
   transparent?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ cartCount = 3, transparent = false }) => {
+const Header: React.FC<HeaderProps> = ({ transparent = false }) => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
 
   const { user, profile, isAdmin, signOut, loading } = useAuth();
 
@@ -33,6 +34,15 @@ const Header: React.FC<HeaderProps> = ({ cartCount = 3, transparent = false }) =
     }
     return () => { document.body.style.overflow = ''; };
   }, [mobileMenuOpen]);
+
+  // Fetch real cart count
+  useEffect(() => {
+    if (user) {
+      getCartCount(user.id).then(setCartCount).catch(() => setCartCount(0));
+    } else {
+      setCartCount(0);
+    }
+  }, [user]);
 
   const navLinks = [
     { label: 'Shop', href: '/product-listing' },

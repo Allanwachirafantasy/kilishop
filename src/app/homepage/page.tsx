@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function HomepagePage() {
   return (
     <div className="min-h-screen flex flex-col bg-kili-bg">
-      <Header cartCount={3} />
+      <Header />
 
       <main className="flex-1">
         <HeroSection />

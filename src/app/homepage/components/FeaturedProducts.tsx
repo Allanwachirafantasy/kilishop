@@ -1,37 +1,26 @@
 'use client';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import ProductCard from './ProductCard';
-import { FEATURED_PRODUCTS } from '@/lib/sampleData';
+import { getFeaturedProducts, type Product } from '@/lib/supabase/services';
 
 const FeaturedProducts: React.FC = () => {
-  const sectionRef = useRef<HTMLElement>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.querySelectorAll('.reveal-hidden').forEach((el) => {
-              el.classList.add('revealed');
-            });
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
+    getFeaturedProducts(8)
+      .then(setProducts)
+      .catch(() => setProducts([]))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
-    <section ref={sectionRef} className="py-10 px-4 sm:px-6">
+    <section className="py-10 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div className="reveal-hidden">
+          <div>
             <p className="section-label mb-1">Handpicked</p>
             <h2 className="text-xl sm:text-2xl font-display font-semibold text-kili-fg">
               Featured Products
@@ -46,17 +35,26 @@ const FeaturedProducts: React.FC = () => {
           </Link>
         </div>
 
-        {/* Product grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 stagger-children">
-          {FEATURED_PRODUCTS.map((product) => (
-            <div key={product.id} className="reveal-hidden">
-              <ProductCard product={product} />
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-kili-card border border-kili-border rounded-xl aspect-[3/4] animate-pulse" />
+            ))}
+          </div>
+        ) : products.length === 0 ? (
+          <div className="text-center py-12 text-kili-muted">
+            <Icon name="CubeIcon" size={40} className="mx-auto mb-3 opacity-40" />
+            <p>No featured products yet</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        )}
 
-        {/* View more CTA */}
-        <div className="mt-8 text-center reveal-hidden">
+        <div className="mt-8 text-center">
           <Link href="/product-listing" className="btn-secondary">
             Browse All Products
             <Icon name="ArrowRightIcon" size={16} />

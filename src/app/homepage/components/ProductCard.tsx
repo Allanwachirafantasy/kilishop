@@ -3,7 +3,9 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import AppImage from '@/components/ui/AppImage';
 import Icon from '@/components/ui/AppIcon';
-import { Product, formatPrice } from '@/lib/sampleData';
+import { type Product, formatPrice } from '@/lib/supabase/services';
+import { useAuth } from '@/contexts/AuthContext';
+import { addToCart, addToWishlist, isInWishlist } from '@/lib/supabase/services';
 
 interface ProductCardProps {
   product: Product;
@@ -40,38 +42,54 @@ const StarRating: React.FC<{ rating: number; size?: 'sm' | 'md' }> = ({ rating, 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, onWishlist }) => {
   const [wishlisted, setWishlisted] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
+  const { user } = useAuth();
 
-  const handleWishlist = (e: React.MouseEvent) => {
+  const handleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
-    setWishlisted(!wishlisted);
-    onWishlist?.(product);
+    if (!user) return;
+    try {
+      const existing = await isInWishlist(user.id, product.id);
+      if (!existing) {
+        await addToWishlist(user.id, product.id);
+        setWishlisted(true);
+      }
+      onWishlist?.(product);
+    } catch {
+      setWishlisted(!wishlisted);
+    }
   };
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
-    setAddedToCart(true);
-    onAddToCart?.(product);
-    setTimeout(() => setAddedToCart(false), 1500);
+    if (!user) {
+      window.location.href = '/login';
+      return;
+    }
+    try {
+      await addToCart(user.id, product.id, 1);
+      setAddedToCart(true);
+      onAddToCart?.(product);
+      setTimeout(() => setAddedToCart(false), 1500);
+    } catch {
+      setAddedToCart(false);
+    }
   };
+
+  const imageUrl = product.imageUrl || product.images?.[0] || '';
 
   return (
     <article className="product-card group relative flex flex-col h-full">
-      {/* Image container */}
       <div className="relative overflow-hidden rounded-t-lg aspect-[4/3] bg-kili-elevated">
-        <Link href="/product-detail" tabIndex={-1} aria-hidden="true">
+        <Link href={`/product-detail?id=${product.id}`} tabIndex={-1} aria-hidden="true">
           <AppImage
-            src={product.image}
-            alt={`${product.name} — ${product.category} product on dark background`}
+            src={imageUrl}
+            alt={`${product.name} — ${product.category?.name || ''} product`}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             className="product-image object-cover"
           />
         </Link>
-
-        {/* Scrim for badges */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent pointer-events-none" aria-hidden="true" />
-
-        {/* Badges */}
         <div className="absolute top-2 left-2 flex flex-col gap-1.5">
           {product.discount && product.discount > 0 && (
             <span className="badge-deal">{product.discount}% OFF</span>
@@ -83,22 +101,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, onWishl
             <span className="badge-deal">{product.badge}</span>
           )}
         </div>
-
-        {/* Wishlist button */}
         <button
           className={`wishlist-btn absolute top-2 right-2 ${wishlisted ? 'active' : ''}`}
           onClick={handleWishlist}
           aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           aria-pressed={wishlisted}
         >
-          <Icon
-            name={wishlisted ? 'HeartIcon' : 'HeartIcon'}
-            variant={wishlisted ? 'solid' : 'outline'}
-            size={14}
-          />
+          <Icon name="HeartIcon" variant={wishlisted ? 'solid' : 'outline'} size={14} />
         </button>
-
-        {/* Out of stock overlay */}
         {product.stock === 0 && (
           <div className="absolute inset-0 bg-kili-bg/70 flex items-center justify-center">
             <span className="text-kili-muted text-sm font-medium">Out of Stock</span>
@@ -106,19 +116,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, onWishl
         )}
       </div>
 
-      {/* Content */}
       <div className="flex flex-col flex-1 p-3 sm:p-4">
-        {/* Category */}
-        <p className="text-xs text-kili-subtle uppercase tracking-wide mb-1">{product.category}</p>
-
-        {/* Name */}
-        <Link href="/product-detail" className="flex-1">
+        <p className="text-xs text-kili-subtle uppercase tracking-wide mb-1">{product.category?.name || product.brand}</p>
+        <Link href={`/product-detail?id=${product.id}`} className="flex-1">
           <h3 className="text-sm sm:text-base font-medium text-kili-fg leading-snug hover:text-primary transition-colors line-clamp-2 mb-2">
             {product.name}
           </h3>
         </Link>
-
-        {/* Rating */}
         <div className="flex items-center gap-1.5 mb-2">
           <StarRating rating={product.rating} />
           <span className="text-xs text-kili-subtle">({product.reviewCount.toLocaleString()})</span>
@@ -126,16 +130,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, onWishl
             <span className="text-xs text-kili-subtle ml-auto">{(product.sold / 1000).toFixed(1)}k sold</span>
           )}
         </div>
-
-        {/* Price */}
         <div className="flex items-center gap-2 mb-3">
           <span className="price-current">{formatPrice(product.price)}</span>
           {product.originalPrice && (
             <span className="price-original">{formatPrice(product.originalPrice)}</span>
           )}
         </div>
-
-        {/* Add to cart */}
         <button
           className={`w-full py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-1.5 ${
             addedToCart
@@ -148,17 +148,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, onWishl
           aria-label={addedToCart ? 'Added to cart' : `Add ${product.name} to cart`}
         >
           {addedToCart ? (
-            <>
-              <Icon name="CheckIcon" size={14} />
-              Added!
-            </>
+            <><Icon name="CheckIcon" size={14} />Added!</>
           ) : product.stock === 0 ? (
             'Out of Stock'
           ) : (
-            <>
-              <Icon name="ShoppingCartIcon" size={14} />
-              Add to Cart
-            </>
+            <><Icon name="ShoppingCartIcon" size={14} />Add to Cart</>
           )}
         </button>
       </div>
