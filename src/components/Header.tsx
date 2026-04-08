@@ -146,14 +146,24 @@ const Header: React.FC<HeaderProps> = ({ transparent = false }) => {
                           Admin Panel
                         </Link>
                       ) : (
-                        <Link
-                          href="/dashboard"
-                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-kili-muted hover:text-kili-fg hover:bg-kili-elevated transition-colors"
-                          onClick={() => setUserMenuOpen(false)}
-                        >
-                          <Icon name="UserCircleIcon" size={16} />
-                          My Account
-                        </Link>
+                        <>
+                          <Link
+                            href="/dashboard"
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-kili-muted hover:text-kili-fg hover:bg-kili-elevated transition-colors"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <Icon name="UserCircleIcon" size={16} />
+                            My Account
+                          </Link>
+                          <Link
+                            href="/orders"
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-kili-muted hover:text-kili-fg hover:bg-kili-elevated transition-colors"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <Icon name="TruckIcon" size={16} />
+                            Track Orders
+                          </Link>
+                        </>
                       )}
                       <button
                         onClick={() => { setUserMenuOpen(false); signOut(); }}

@@ -166,6 +166,7 @@ export default function CustomerDashboardPage() {
               {[
                 { label: 'Continue Shopping', href: '/product-listing', icon: 'ShoppingCartIcon' },
                 { label: 'View Cart', href: '/cart', icon: 'ShoppingBagIcon' },
+                { label: 'Track Orders', href: '/orders', icon: 'TruckIcon' },
                 { label: 'Checkout', href: '/checkout', icon: 'CreditCardIcon' },
               ].map((item) => (
                 <Link key={item.label} href={item.href} className="bg-kili-card border border-kili-border rounded-xl p-4 flex flex-col items-center gap-2 hover:border-primary/40 hover:bg-kili-elevated transition-all text-center">
