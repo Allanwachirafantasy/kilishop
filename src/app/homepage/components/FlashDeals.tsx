@@ -101,7 +101,7 @@ const FlashDeals: React.FC = () => {
                     sizes="(max-width: 768px) 256px, 25vw"
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-kili-card/60 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-white/40 via-transparent to-transparent pointer-events-none" />
                   <div className="absolute top-2 left-2">
                     <span className="badge-deal">-{product.discount}%</span>
                   </div>

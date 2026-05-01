@@ -49,7 +49,9 @@ export default function CheckoutPage() {
     if (user) {
       getCartItems(user.id).then(setCartItems).finally(() => setLoadingCart(false));
       if (profile) {
-        const [firstName = '', ...rest] = (profile.fullName || '').split(' ');
+        const nameParts = (profile.fullName || '').split(' ');
+        const firstName = nameParts[0] || '';
+        const rest = nameParts.slice(1);
         setForm((f) => ({
           ...f,
           firstName,
@@ -154,8 +156,8 @@ export default function CheckoutPage() {
         <Header />
         <main className="flex-1 flex items-center justify-center px-4 py-16">
           <div className="max-w-md w-full text-center space-y-6">
-            <div className="w-20 h-20 rounded-full bg-green-500/20 border-2 border-green-500 flex items-center justify-center mx-auto">
-              <Icon name="CheckIcon" size={40} className="text-green-400" />
+            <div className="w-20 h-20 rounded-full bg-green-100 border-2 border-green-500 flex items-center justify-center mx-auto">
+              <Icon name="CheckIcon" size={40} className="text-green-600" />
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-display font-semibold text-kili-fg mb-2">Order Confirmed! 🎉</h1>
@@ -257,7 +259,7 @@ export default function CheckoutPage() {
                           placeholder={placeholder}
                           className={`input-dark ${formErrors[field] ? 'border-red-500' : ''}`}
                         />
-                        {formErrors[field] && <p className="text-xs text-red-400 mt-1">{formErrors[field]}</p>}
+                        {formErrors[field] && <p className="text-xs text-red-500 mt-1">{formErrors[field]}</p>}
                       </div>
                     ))}
                     <div className="sm:col-span-2">
@@ -269,7 +271,7 @@ export default function CheckoutPage() {
                         placeholder="123 Kenyatta Avenue, Apt 4B"
                         className={`input-dark ${formErrors.address ? 'border-red-500' : ''}`}
                       />
-                      {formErrors.address && <p className="text-xs text-red-400 mt-1">{formErrors.address}</p>}
+                      {formErrors.address && <p className="text-xs text-red-500 mt-1">{formErrors.address}</p>}
                     </div>
                     <div>
                       <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">City *</label>
@@ -280,7 +282,7 @@ export default function CheckoutPage() {
                         placeholder="Nairobi"
                         className={`input-dark ${formErrors.city ? 'border-red-500' : ''}`}
                       />
-                      {formErrors.city && <p className="text-xs text-red-400 mt-1">{formErrors.city}</p>}
+                      {formErrors.city && <p className="text-xs text-red-500 mt-1">{formErrors.city}</p>}
                     </div>
                     <div>
                       <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">County *</label>
@@ -292,7 +294,7 @@ export default function CheckoutPage() {
                         <option value="">Select county</option>
                         {KENYAN_COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      {formErrors.county && <p className="text-xs text-red-400 mt-1">{formErrors.county}</p>}
+                      {formErrors.county && <p className="text-xs text-red-500 mt-1">{formErrors.county}</p>}
                     </div>
                     <div>
                       <label className="text-xs font-medium text-kili-muted uppercase tracking-wide block mb-1.5">Postal Code</label>
@@ -372,7 +374,7 @@ export default function CheckoutPage() {
                     <p className="text-kili-muted">{form.phone}</p>
                   </div>
                   {orderError && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">{orderError}</div>
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{orderError}</div>
                   )}
                 </div>
               )}
@@ -424,7 +426,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between text-kili-muted">
                     <span>Shipping</span>
-                    <span className={shipping === 0 ? 'text-green-400' : ''}>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
+                    <span className={shipping === 0 ? 'text-green-600' : ''}>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
                   </div>
                 </div>
                 <div className="divider" />

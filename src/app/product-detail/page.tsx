@@ -212,7 +212,7 @@ function ProductDetailContent() {
                   )}
                 </div>
                 {product.discount && product.originalPrice && (
-                  <p className="text-sm text-green-400 font-medium">
+                  <p className="text-sm text-green-600 font-medium">
                     You save {formatPrice(product.originalPrice - product.price)} ({product.discount}% off)
                   </p>
                 )}
@@ -332,7 +332,7 @@ function ProductDetailContent() {
                       rows={3}
                       className="input-dark resize-none"
                     />
-                    {reviewMsg && <p className={`text-sm ${reviewMsg.includes('success') ? 'text-green-400' : 'text-red-400'}`}>{reviewMsg}</p>}
+                    {reviewMsg && <p className={`text-sm ${reviewMsg.includes('success') ? 'text-green-600' : 'text-red-500'}`}>{reviewMsg}</p>}
                     <button type="submit" disabled={submittingReview} className="btn-primary py-2 px-4 text-sm">
                       {submittingReview ? 'Submitting...' : 'Submit Review'}
                     </button>

@@ -43,10 +43,10 @@ export default function AdminDashboardPage() {
   if (!isAdmin) return null;
 
   const statCards = [
-    { label: 'Total Orders', value: stats.totalOrders.toLocaleString(), icon: 'ShoppingBagIcon', color: 'text-blue-400' },
-    { label: 'Revenue (KSh)', value: formatPrice(stats.totalRevenue), icon: 'BanknotesIcon', color: 'text-green-400' },
-    { label: 'Total Products', value: stats.totalProducts.toLocaleString(), icon: 'CubeIcon', color: 'text-purple-400' },
-    { label: 'Customers', value: stats.totalCustomers.toLocaleString(), icon: 'UsersIcon', color: 'text-orange-400' },
+    { label: 'Total Orders', value: stats.totalOrders.toLocaleString(), icon: 'ShoppingBagIcon', color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Revenue (KSh)', value: formatPrice(stats.totalRevenue), icon: 'BanknotesIcon', color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Total Products', value: stats.totalProducts.toLocaleString(), icon: 'CubeIcon', color: 'text-purple-600', bg: 'bg-purple-50' },
+    { label: 'Customers', value: stats.totalCustomers.toLocaleString(), icon: 'UsersIcon', color: 'text-orange-600', bg: 'bg-orange-50' },
   ];
 
   const adminLinks = [
@@ -57,29 +57,30 @@ export default function AdminDashboardPage() {
   ];
 
   const statusColors: Record<string, string> = {
-    delivered: 'text-green-400 bg-green-400/10',
-    processing: 'text-yellow-400 bg-yellow-400/10',
-    shipped: 'text-blue-400 bg-blue-400/10',
-    pending: 'text-orange-400 bg-orange-400/10',
-    cancelled: 'text-red-400 bg-red-400/10',
+    delivered: 'text-green-700 bg-green-50 border border-green-200',
+    processing: 'text-yellow-700 bg-yellow-50 border border-yellow-200',
+    shipped: 'text-blue-700 bg-blue-50 border border-blue-200',
+    pending: 'text-orange-700 bg-orange-50 border border-orange-200',
+    cancelled: 'text-red-700 bg-red-50 border border-red-200',
   };
 
   return (
     <div className="min-h-screen bg-kili-bg">
-      <header className="bg-kili-card border-b border-kili-border sticky top-0 z-40">
+      {/* Admin Header */}
+      <header className="bg-white border-b border-black/8 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
-            <Link href="/homepage" className="flex items-center gap-2">
-              <AppLogo size={28} />
-              <span className="font-display font-semibold text-kili-fg">KiliShop</span>
+            <Link href="/homepage" className="flex items-center gap-2.5">
+              <AppLogo size={30} />
+              <span className="font-display font-bold text-kili-fg text-lg tracking-tight">Alluvemall</span>
             </Link>
-            <span className="text-kili-border">|</span>
-            <span className="text-sm font-medium text-primary">Admin Panel</span>
+            <span className="text-black/15 text-lg">|</span>
+            <span className="text-sm font-semibold text-primary">Admin Panel</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-sm text-kili-muted">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <Icon name="UserCircleIcon" size={18} className="text-primary" />
+            <div className="hidden sm:flex items-center gap-2 text-sm">
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                <span className="text-white text-xs font-bold">{profile.fullName?.charAt(0) || 'A'}</span>
               </div>
               <span className="text-kili-fg font-medium">{profile.fullName}</span>
               <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">Admin</span>
@@ -88,7 +89,7 @@ export default function AdminDashboardPage() {
               <Icon name="HomeIcon" size={15} />
               Store
             </Link>
-            <button onClick={signOut} className="btn-secondary py-1.5 px-3 text-sm text-red-400 hover:text-red-300">
+            <button onClick={signOut} className="btn-secondary py-1.5 px-3 text-sm text-red-500 hover:text-red-600 hover:border-red-300">
               <Icon name="ArrowRightOnRectangleIcon" size={15} />
               Logout
             </button>
@@ -98,7 +99,7 @@ export default function AdminDashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div>
-          <h1 className="text-2xl font-display font-semibold text-kili-fg">Welcome back, {profile.fullName.split(' ')[0]} 👋</h1>
+          <h1 className="text-2xl font-display font-bold text-kili-fg">Welcome back, {profile.fullName.split(' ')[0]} 👋</h1>
           <p className="text-kili-muted mt-1 text-sm">Here&apos;s what&apos;s happening with your store today.</p>
         </div>
 
@@ -106,14 +107,16 @@ export default function AdminDashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {statsLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-kili-card border border-kili-border rounded-2xl p-5 h-28 animate-pulse" />
+              <div key={i} className="bg-white border border-black/8 rounded-2xl p-5 h-28 animate-pulse" />
             ))
           ) : (
             statCards.map((stat) => (
-              <div key={stat.label} className="bg-kili-card border border-kili-border rounded-2xl p-5 space-y-3">
+              <div key={stat.label} className="bg-white border border-black/8 rounded-2xl p-5 space-y-3 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-kili-muted font-medium uppercase tracking-wide">{stat.label}</p>
-                  <Icon name={stat.icon as any} size={18} className={stat.color} />
+                  <p className="text-xs text-kili-muted font-semibold uppercase tracking-wide">{stat.label}</p>
+                  <div className={`p-2 rounded-lg ${stat.bg}`}>
+                    <Icon name={stat.icon as Parameters<typeof Icon>[0]['name']} size={16} className={stat.color} />
+                  </div>
                 </div>
                 <p className="text-2xl font-display font-bold text-kili-fg">{stat.value}</p>
               </div>
@@ -126,9 +129,9 @@ export default function AdminDashboardPage() {
           <h2 className="text-lg font-display font-semibold text-kili-fg mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {adminLinks.map((link) => (
-              <Link key={link.label} href={link.href} className="bg-kili-card border border-kili-border rounded-2xl p-5 flex items-start gap-4 hover:border-primary/40 hover:bg-kili-elevated transition-all group">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                  <Icon name={link.icon as any} size={20} className="text-primary" />
+              <Link key={link.label} href={link.href} className="bg-white border border-black/8 rounded-2xl p-5 flex items-start gap-4 hover:border-primary/40 hover:shadow-md transition-all group shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
+                  <Icon name={link.icon as Parameters<typeof Icon>[0]['name']} size={20} className="text-primary group-hover:text-white transition-colors" />
                 </div>
                 <div>
                   <p className="font-semibold text-kili-fg text-sm group-hover:text-primary transition-colors">{link.label}</p>
@@ -140,10 +143,10 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Recent Orders */}
-        <div className="bg-kili-card border border-kili-border rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white border border-black/8 rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-display font-semibold text-kili-fg">Recent Orders</h2>
-            <Link href="/admin/orders" className="text-sm text-primary hover:text-primary-light transition-colors">View all →</Link>
+            <Link href="/admin/orders" className="text-sm text-primary hover:text-primary-dark font-medium transition-colors">View all →</Link>
           </div>
           {statsLoading ? (
             <div className="space-y-3">
@@ -152,21 +155,21 @@ export default function AdminDashboardPage() {
           ) : recentOrders.length === 0 ? (
             <p className="text-center text-kili-muted py-8">No orders yet</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-1">
               {recentOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between py-3 border-b border-kili-border last:border-0">
+                <div key={order.id} className="flex items-center justify-between py-3 border-b border-black/6 last:border-0">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-kili-elevated flex items-center justify-center">
-                      <Icon name="ShoppingBagIcon" size={14} className="text-kili-muted" />
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Icon name="ShoppingBagIcon" size={15} className="text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-kili-fg">#{order.orderNumber}</p>
+                      <p className="text-sm font-semibold text-kili-fg">#{order.orderNumber}</p>
                       <p className="text-xs text-kili-muted">{order.userName || order.userEmail || 'Customer'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <p className="text-sm font-semibold text-kili-fg">{formatPrice(order.total)}</p>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status] || ''}`}>
+                    <p className="text-sm font-bold text-kili-fg">{formatPrice(order.total)}</p>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusColors[order.status] || ''}`}>
                       {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                     </span>
                   </div>

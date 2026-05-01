@@ -15,11 +15,11 @@ const STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bg: string; icon: string; step: number }
 > = {
-  pending:    { label: 'Order Placed',   color: 'text-orange-400', bg: 'bg-orange-400',  icon: 'ClipboardDocumentListIcon', step: 1 },
-  processing: { label: 'Processing',     color: 'text-yellow-400', bg: 'bg-yellow-400',  icon: 'CogIcon',                   step: 2 },
-  shipped:    { label: 'Shipped',        color: 'text-blue-400',   bg: 'bg-blue-400',    icon: 'TruckIcon',                 step: 3 },
-  delivered:  { label: 'Delivered',      color: 'text-green-400',  bg: 'bg-green-400',   icon: 'CheckCircleIcon',           step: 4 },
-  cancelled:  { label: 'Cancelled',      color: 'text-red-400',    bg: 'bg-red-400',     icon: 'XCircleIcon',               step: 0 },
+  pending:    { label: 'Order Placed',   color: 'text-orange-600', bg: 'bg-orange-500',  icon: 'ClipboardDocumentListIcon', step: 1 },
+  processing: { label: 'Processing',     color: 'text-yellow-600', bg: 'bg-yellow-500',  icon: 'CogIcon',                   step: 2 },
+  shipped:    { label: 'Shipped',        color: 'text-blue-600',   bg: 'bg-blue-500',    icon: 'TruckIcon',                 step: 3 },
+  delivered:  { label: 'Delivered',      color: 'text-green-600',  bg: 'bg-green-500',   icon: 'CheckCircleIcon',           step: 4 },
+  cancelled:  { label: 'Cancelled',      color: 'text-red-600',    bg: 'bg-red-500',     icon: 'XCircleIcon',               step: 0 },
 };
 
 const TIMELINE_STEPS = [
@@ -78,10 +78,10 @@ function ShipmentTimeline({ order }: { order: Order }) {
 
   if (isCancelled) {
     return (
-      <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
-        <Icon name="XCircleIcon" size={24} className="text-red-400 shrink-0" />
+      <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl">
+        <Icon name="XCircleIcon" size={24} className="text-red-500 shrink-0" />
         <div>
-          <p className="font-medium text-red-400">Order Cancelled</p>
+          <p className="font-medium text-red-600">Order Cancelled</p>
           <p className="text-xs text-kili-muted mt-0.5">This order has been cancelled.</p>
         </div>
       </div>
@@ -126,7 +126,7 @@ function ShipmentTimeline({ order }: { order: Order }) {
             <div className="pt-1.5 pb-2">
               <p
                 className={`text-sm font-semibold ${
-                  isCompleted ? 'text-green-400' : isActive ? 'text-kili-fg' : 'text-kili-subtle'
+                  isCompleted ? 'text-green-600' : isActive ? 'text-kili-fg' : 'text-kili-subtle'
                 }`}
               >
                 {step.label}
@@ -162,8 +162,8 @@ function OrderDetail({ order, liveUpdating }: { order: Order; liveUpdating: bool
     <div className="space-y-5">
       {/* Live update indicator */}
       {liveUpdating && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-xl text-xs text-green-400">
-          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700">
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
           Live updates active — this page refreshes automatically
         </div>
       )}
@@ -237,7 +237,7 @@ function OrderDetail({ order, liveUpdating }: { order: Order; liveUpdating: bool
               <span>Shipping</span><span>{order.shippingFee === 0 ? 'Free' : formatPrice(order.shippingFee)}</span>
             </div>
             {order.discountAmount > 0 && (
-              <div className="flex justify-between text-xs text-green-400">
+              <div className="flex justify-between text-xs text-green-600">
                 <span>Discount</span><span>-{formatPrice(order.discountAmount)}</span>
               </div>
             )}
@@ -279,7 +279,7 @@ function OrderDetail({ order, liveUpdating }: { order: Order; liveUpdating: bool
             <span className="capitalize">{order.paymentMethod === 'mpesa' ? 'M-Pesa' : order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Card'}</span>
           </div>
           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-            order.paymentStatus === 'paid' ? 'bg-green-400/10 text-green-400' : 'bg-yellow-400/10 text-yellow-400'
+            order.paymentStatus === 'paid' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
           }`}>
             {order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
           </span>
@@ -381,8 +381,8 @@ function OrdersPageContent() {
             <p className="text-sm text-kili-muted mt-0.5">Track your orders in real time</p>
           </div>
           {liveUpdating && (
-            <div className="ml-auto flex items-center gap-1.5 text-xs text-green-400">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <div className="ml-auto flex items-center gap-1.5 text-xs text-green-600">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               Live
             </div>
           )}

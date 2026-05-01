@@ -76,11 +76,11 @@ export default function CartPage() {
   const total = subtotal + shipping - discount;
 
   const applyCoupon = () => {
-    if (couponCode.toUpperCase() === 'KILI10') {
+    if (couponCode.toUpperCase() === 'ALLUV10') {
       setCouponApplied(true);
       setCouponError('');
     } else {
-      setCouponError('Invalid coupon code. Try KILI10 for 10% off.');
+      setCouponError('Invalid coupon code. Try ALLUV10 for 10% off.');
       setCouponApplied(false);
     }
   };
@@ -199,7 +199,7 @@ export default function CartPage() {
                       <button
                         onClick={() => handleRemove(item.id)}
                         disabled={updatingId === item.id}
-                        className="flex items-center gap-1 text-xs text-kili-subtle hover:text-red-400 transition-colors"
+                        className="flex items-center gap-1 text-xs text-kili-subtle hover:text-red-500 transition-colors"
                         aria-label={`Remove ${item.product?.name} from cart`}
                       >
                         <Icon name="TrashIcon" size={14} />
@@ -227,20 +227,20 @@ export default function CartPage() {
                     <span className="text-kili-fg">{formatPrice(subtotal)}</span>
                   </div>
                   {savings > 0 && (
-                    <div className="flex justify-between text-green-400">
+                    <div className="flex justify-between text-green-600">
                       <span>Savings</span>
                       <span>-{formatPrice(savings)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-kili-muted">
                     <span>Shipping</span>
-                    <span className={shipping === 0 ? 'text-green-400' : 'text-kili-fg'}>
+                    <span className={shipping === 0 ? 'text-green-600' : 'text-kili-fg'}>
                       {shipping === 0 ? 'FREE' : formatPrice(shipping)}
                     </span>
                   </div>
                   {couponApplied && (
-                    <div className="flex justify-between text-green-400">
-                      <span>Coupon (KILI10)</span>
+                    <div className="flex justify-between text-green-600">
+                      <span>Coupon (ALLUV10)</span>
                       <span>-{formatPrice(discount)}</span>
                     </div>
                   )}
@@ -258,8 +258,8 @@ export default function CartPage() {
                     />
                     <button onClick={applyCoupon} className="btn-secondary py-2 px-3 text-sm shrink-0">Apply</button>
                   </div>
-                  {couponError && <p className="text-xs text-red-400">{couponError}</p>}
-                  {couponApplied && <p className="text-xs text-green-400">✓ Coupon applied!</p>}
+                  {couponError && <p className="text-xs text-red-500">{couponError}</p>}
+                  {couponApplied && <p className="text-xs text-green-600">✓ Coupon applied!</p>}
                 </div>
 
                 <div className="divider" />

@@ -9,7 +9,7 @@ import FlashDeals from './components/FlashDeals';
 import TrustSection from './components/TrustSection';
 
 export const metadata: Metadata = {
-  title: 'KiliShop — Africa\'s Premier Online Marketplace',
+  title: 'Alluvemall — Africa\'s Premier Online Marketplace',
   description: 'Shop thousands of products at unbeatable prices. Fast delivery across Kenya, Nigeria & Ghana. Electronics, Fashion, Home & more.',
 };
 
