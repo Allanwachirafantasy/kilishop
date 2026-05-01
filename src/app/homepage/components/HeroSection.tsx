@@ -16,12 +16,11 @@ const heroSlides = [
   ctaHref: '/product-listing?filter=deals',
   secondaryCta: 'Browse Categories',
   secondaryHref: '/product-listing',
-  image: "https://img.rocket.new/generatedImages/rocket_gen_img_1aba4c335-1772227833877.png",
-  imageAlt: 'Shopping bags and electronics on dark surface with warm orange accent lighting, moody studio product photography',
+  image: "https://images.unsplash.com/photo-1551562641-9998f16c6bff",
+  imageAlt: 'Shopping bags and electronics arranged with warm orange accent lighting, premium product photography',
   stat1: { value: '2M+', label: 'Happy Buyers' },
   stat2: { value: '50K+', label: 'Products' },
-  floatingBadge: { icon: '⭐', title: '4.9/5 Rating', sub: '120K+ Reviews' },
-  accentColor: '#FF6B2B'
+  floatingBadge: { icon: '⭐', title: '4.9/5 Rating', sub: '120K+ Reviews' }
 },
 {
   id: 2,
@@ -34,12 +33,11 @@ const heroSlides = [
   ctaHref: '/product-listing?category=fashion',
   secondaryCta: 'View Lookbook',
   secondaryHref: '/product-listing',
-  image: "https://img.rocket.new/generatedImages/rocket_gen_img_192302f68-1775234675002.png",
-  imageAlt: 'Colorful African fabric patterns and fashion items arranged on dark background with dramatic lighting',
+  image: "https://img.rocket.new/generatedImages/rocket_gen_img_1789e8ac0-1772797520408.png",
+  imageAlt: 'Colorful African fabric patterns and fashion items with dramatic lighting',
   stat1: { value: '3.5K+', label: 'Fashion Items' },
   stat2: { value: 'Free', label: 'Returns' },
-  floatingBadge: { icon: '🏆', title: 'Top Rated', sub: 'Fashion Store' },
-  accentColor: '#EC4899'
+  floatingBadge: { icon: '🏆', title: 'Top Rated', sub: 'Fashion Store' }
 }];
 
 
@@ -69,23 +67,16 @@ const HeroSection: React.FC = () => {
   const slide = heroSlides[currentSlide];
 
   return (
-    <section className="relative overflow-hidden min-h-[85vh] sm:min-h-[75vh] md:min-h-[80vh] flex items-center">
-      {/* Atmospheric background blobs */}
-      <div className="hero-blob-1 top-[-100px] left-[-100px] opacity-60" aria-hidden="true" />
-      <div className="hero-blob-2 bottom-[-50px] right-[10%] opacity-40" aria-hidden="true" />
+    <section className="relative overflow-hidden min-h-[80vh] sm:min-h-[70vh] md:min-h-[75vh] flex items-center bg-white">
+      {/* Subtle background pattern */}
       <div
-        className="absolute top-[30%] right-[5%] w-64 h-64 rounded-full pointer-events-none"
-        style={{ background: 'rgba(255,184,0,0.08)', filter: 'blur(80px)' }}
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse at 70% 50%, rgba(249,115,22,0.06) 0%, transparent 60%)' }}
         aria-hidden="true" />
       
-
-      {/* Noise texture overlay */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.03]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-          backgroundSize: '200px 200px'
-        }}
+        className="absolute top-0 right-0 w-1/2 h-full pointer-events-none"
+        style={{ background: 'linear-gradient(135deg, transparent 0%, rgba(249,115,22,0.04) 100%)' }}
         aria-hidden="true" />
       
 
@@ -94,14 +85,14 @@ const HeroSection: React.FC = () => {
           {/* Left: Content */}
           <div className="space-y-6 order-2 md:order-1">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm animate-fade-in">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/5 animate-fade-in">
               <span className="flex h-2 w-2 rounded-full bg-primary pulse-dot" aria-hidden="true" />
-              <span className="text-xs font-medium text-kili-fg tracking-wide">{slide.badge}</span>
+              <span className="text-xs font-semibold text-primary tracking-wide">{slide.badge}</span>
             </div>
 
             {/* Headline */}
             <div className="space-y-1">
-              <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-semibold leading-[1.1] tracking-tight text-kili-fg">
+              <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.1] tracking-tight text-kili-fg">
                 {slide.headline}{' '}
                 <span className="gradient-text">{slide.headlineAccent}</span>
               </h1>
@@ -121,7 +112,7 @@ const HeroSection: React.FC = () => {
                 <div className="text-2xl font-bold text-kili-fg">{slide.stat1.value}</div>
                 <div className="text-xs text-kili-subtle uppercase tracking-wider">{slide.stat1.label}</div>
               </div>
-              <div className="w-px h-10 bg-kili-border" aria-hidden="true" />
+              <div className="w-px h-10 bg-black/10" aria-hidden="true" />
               <div>
                 <div className="text-2xl font-bold text-kili-fg">{slide.stat2.value}</div>
                 <div className="text-xs text-kili-subtle uppercase tracking-wider">{slide.stat2.label}</div>
@@ -149,9 +140,8 @@ const HeroSection: React.FC = () => {
                 aria-label={`Slide ${idx + 1}`}
                 onClick={() => goToSlide(idx)}
                 className={`h-1.5 rounded-full transition-all duration-300 ${
-                idx === currentSlide ? 'w-8 bg-primary' : 'w-3 bg-kili-subtle hover:bg-kili-muted'}`
+                idx === currentSlide ? 'w-8 bg-primary' : 'w-3 bg-black/15 hover:bg-black/30'}`
                 } />
-
               )}
             </div>
           </div>
@@ -160,9 +150,9 @@ const HeroSection: React.FC = () => {
           <div className="relative order-1 md:order-2 group">
             {/* Glow behind image */}
             <div
-              className="absolute inset-0 rounded-xl transition-all duration-700 group-hover:blur-2xl"
+              className="absolute inset-0 rounded-2xl transition-all duration-700"
               style={{
-                background: 'linear-gradient(135deg, rgba(255,107,43,0.2) 0%, rgba(255,184,0,0.1) 100%)',
+                background: 'linear-gradient(135deg, rgba(249,115,22,0.15) 0%, rgba(217,119,6,0.08) 100%)',
                 filter: 'blur(40px)',
                 transform: 'scale(0.9)'
               }}
@@ -170,7 +160,7 @@ const HeroSection: React.FC = () => {
             
 
             {/* Main image */}
-            <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-card-hover">
+            <div className="relative rounded-2xl overflow-hidden border border-black/8 shadow-lg">
               <AppImage
                 src={slide.image}
                 alt={slide.imageAlt}
@@ -179,14 +169,13 @@ const HeroSection: React.FC = () => {
                 priority
                 className="w-full object-cover aspect-[4/3] sm:aspect-[16/10] transition-all duration-700 group-hover:scale-[1.02]" />
               
-              {/* Scrim for any text overlays */}
-              <div className="absolute inset-0 bg-gradient-to-t from-kili-bg/30 via-transparent to-transparent pointer-events-none" aria-hidden="true" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent pointer-events-none" aria-hidden="true" />
             </div>
 
             {/* Floating badge */}
-            <div className="absolute -bottom-4 -left-4 sm:bottom-6 sm:left-6 glass rounded-xl p-3 shadow-xl float-anim">
+            <div className="absolute -bottom-4 -left-4 sm:bottom-6 sm:left-6 glass rounded-xl p-3 shadow-lg float-anim">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-lg">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg">
                   {slide.floatingBadge.icon}
                 </div>
                 <div>
@@ -197,10 +186,10 @@ const HeroSection: React.FC = () => {
             </div>
 
             {/* Delivery badge */}
-            <div className="absolute -top-3 -right-3 sm:top-4 sm:right-4 glass rounded-full px-3 py-1.5 shadow-xl">
+            <div className="absolute -top-3 -right-3 sm:top-4 sm:right-4 glass rounded-full px-3 py-1.5 shadow-md">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs">🚚</span>
-                <span className="text-xs font-medium text-kili-fg">Fast Delivery</span>
+                <span className="text-xs font-semibold text-kili-fg">Fast Delivery</span>
               </div>
             </div>
           </div>

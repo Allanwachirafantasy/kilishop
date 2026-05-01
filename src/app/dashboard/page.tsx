@@ -63,11 +63,11 @@ export default function CustomerDashboardPage() {
   };
 
   const statusColors: Record<string, string> = {
-    delivered: 'bg-green-400/10 text-green-400',
-    processing: 'bg-yellow-400/10 text-yellow-400',
-    shipped: 'bg-blue-400/10 text-blue-400',
-    pending: 'bg-orange-400/10 text-orange-400',
-    cancelled: 'bg-red-400/10 text-red-400',
+    delivered: 'bg-green-50 text-green-700 border border-green-200',
+    processing: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+    shipped: 'bg-blue-50 text-blue-700 border border-blue-200',
+    pending: 'bg-orange-50 text-orange-700 border border-orange-200',
+    cancelled: 'bg-red-50 text-red-700 border border-red-200',
   };
 
   const totalSpent = orders.filter((o) => o.status === 'delivered').reduce((s, o) => s + o.total, 0);
@@ -89,7 +89,7 @@ export default function CustomerDashboardPage() {
               Welcome back, <span className="text-kili-fg font-medium">{profile.fullName}</span>
             </p>
           </div>
-          <button onClick={signOut} className="btn-secondary py-2 px-3 text-sm text-red-400 hover:text-red-300">
+          <button onClick={signOut} className="btn-secondary py-2 px-3 text-sm text-red-500 hover:text-red-600 hover:border-red-300">
             <Icon name="ArrowRightOnRectangleIcon" size={16} />
             Sign Out
           </button>
@@ -113,9 +113,9 @@ export default function CustomerDashboardPage() {
           <div className="space-y-6">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {[
-                { label: 'Total Orders', value: orders.length.toString(), icon: 'ShoppingBagIcon', color: 'text-blue-400' },
-                { label: 'Total Spent', value: formatPrice(totalSpent), icon: 'BanknotesIcon', color: 'text-green-400' },
-                { label: 'Pending Orders', value: orders.filter((o) => o.status === 'pending' || o.status === 'processing').length.toString(), icon: 'ClockIcon', color: 'text-orange-400' },
+                { label: 'Total Orders', value: orders.length.toString(), icon: 'ShoppingBagIcon', color: 'text-blue-600' },
+                { label: 'Total Spent', value: formatPrice(totalSpent), icon: 'BanknotesIcon', color: 'text-green-600' },
+                { label: 'Pending Orders', value: orders.filter((o) => o.status === 'pending' || o.status === 'processing').length.toString(), icon: 'ClockIcon', color: 'text-orange-600' },
               ].map((stat) => (
                 <div key={stat.label} className="bg-kili-card border border-kili-border rounded-2xl p-4 space-y-2">
                   <div className="flex items-center justify-between">
@@ -248,7 +248,7 @@ export default function CustomerDashboardPage() {
             </div>
 
             {saveMsg && (
-              <div className={`p-3 rounded-xl text-sm ${saveMsg.includes('success') ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+              <div className={`p-3 rounded-xl text-sm ${saveMsg.includes('success') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
                 {saveMsg}
               </div>
             )}

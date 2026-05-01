@@ -10,11 +10,11 @@ import { getAllOrders, updateOrderStatus, formatPrice, type Order } from '@/lib/
 const STATUS_OPTIONS: Order['status'][] = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
 
 const statusColors: Record<string, string> = {
-  delivered: 'bg-green-400/10 text-green-400',
-  processing: 'bg-yellow-400/10 text-yellow-400',
-  shipped: 'bg-blue-400/10 text-blue-400',
-  pending: 'bg-orange-400/10 text-orange-400',
-  cancelled: 'bg-red-400/10 text-red-400',
+  delivered: 'bg-green-50 text-green-700 border border-green-200',
+  processing: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  shipped: 'bg-blue-50 text-blue-700 border border-blue-200',
+  pending: 'bg-orange-50 text-orange-700 border border-orange-200',
+  cancelled: 'bg-red-50 text-red-700 border border-red-200',
 };
 
 export default function AdminOrdersPage() {
@@ -72,7 +72,7 @@ export default function AdminOrdersPage() {
       <header className="bg-kili-card border-b border-kili-border sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
-            <Link href="/admin" className="flex items-center gap-2"><AppLogo size={28} /><span className="font-display font-semibold text-kili-fg">KiliShop</span></Link>
+            <Link href="/admin" className="flex items-center gap-2.5"><AppLogo size={28} /><span className="font-display font-bold text-kili-fg tracking-tight">Alluvemall</span></Link>
             <span className="text-kili-border">|</span>
             <span className="text-sm font-medium text-primary">Orders</span>
           </div>

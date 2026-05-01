@@ -10,8 +10,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
-  title: 'KiliShop — Africa\'s Premier Online Marketplace',
-  description: 'Shop thousands of products at unbeatable prices on KiliShop — Africa\'s fastest-growing online marketplace with fast delivery nationwide.',
+  title: 'Alluvemall — Africa\'s Premier Online Marketplace',
+  description: 'Shop thousands of products at unbeatable prices on Alluvemall — Africa\'s fastest-growing online marketplace with fast delivery nationwide.',
   icons: {
     icon: [
       { url: '/favicon.ico', type: 'image/x-icon' }
