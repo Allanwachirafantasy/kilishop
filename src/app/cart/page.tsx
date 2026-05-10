@@ -162,6 +162,13 @@ export default function CartPage() {
                       </h2>
                     </Link>
 
+                    {/* Selected color */}
+                    {item.selectedColor && (
+                      <p className="text-xs text-kili-muted mb-1">
+                        Color: <span className="text-kili-fg font-medium">{item.selectedColor}</span>
+                      </p>
+                    )}
+
                     {/* Stock warning */}
                     {item.product && item.product.stock <= 5 && item.product.stock > 0 && (
                       <p className="text-xs text-yellow-400 mb-1">Only {item.product.stock} left in stock!</p>
