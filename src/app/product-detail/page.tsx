@@ -1,10 +1,10 @@
 'use client';
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import AppImage from '@/components/ui/AppImage';
+
 import Icon from '@/components/ui/AppIcon';
 import ProductCard from '@/app/homepage/components/ProductCard';
 import { StarRating } from '@/app/homepage/components/ProductCard';
@@ -13,7 +13,10 @@ import {
   isInWishlist, addReview, formatPrice, getStockStatus,
   type Product, type Review
 } from '@/lib/supabase/services';
+import { getProductImages, type ProductImageRecord } from '@/lib/supabase/imageUpload';
 import { useAuth } from '@/contexts/AuthContext';
+
+const FALLBACK_IMAGE = '/assets/images/no_image.png';
 
 function ProductDetailContent() {
   const searchParams = useSearchParams();
@@ -22,10 +25,11 @@ function ProductDetailContent() {
   const { user } = useAuth();
 
   const [product, setProduct] = useState<Product | null>(null);
+  const [productImages, setProductImages] = useState<ProductImageRecord[]>([]);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedImage, setSelectedImage] = useState(0);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
   const [addedToCart, setAddedToCart] = useState(false);
@@ -34,6 +38,7 @@ function ProductDetailContent() {
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewMsg, setReviewMsg] = useState('');
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     if (!productId) {
@@ -44,6 +49,17 @@ function ProductDetailContent() {
     getProductById(productId).then(async (p) => {
       if (!p) { router.replace('/product-listing'); return; }
       setProduct(p);
+
+      // Fetch product_images table
+      const imgs = await getProductImages(productId);
+      setProductImages(imgs);
+
+      // Set initial selected image: cover first, then first gallery, then product.imageUrl, then fallback
+      const cover = imgs.find((img) => img.isCover);
+      const firstImg = imgs[0];
+      const initial = cover?.imageUrl || firstImg?.imageUrl || p.imageUrl || FALLBACK_IMAGE;
+      setSelectedImageUrl(initial);
+
       if (p.categoryId) {
         const [related, revs] = await Promise.all([
           getRelatedProducts(p.categoryId, p.id, 4),
@@ -58,6 +74,36 @@ function ProductDetailContent() {
       }
     }).finally(() => setLoading(false));
   }, [productId, user, router]);
+
+  // Build the full image list for gallery display
+  const allImages: string[] = React.useMemo(() => {
+    if (productImages.length > 0) {
+      // Sort: cover first, then by sort_order
+      const sorted = [...productImages].sort((a, b) => {
+        if (a.isCover && !b.isCover) return -1;
+        if (!a.isCover && b.isCover) return 1;
+        return a.sortOrder - b.sortOrder;
+      });
+      return sorted.map((img) => img.imageUrl);
+    }
+    // Fallback to product.images array or product.imageUrl
+    if (product?.images?.length) return product.images;
+    if (product?.imageUrl) return [product.imageUrl];
+    return [FALLBACK_IMAGE];
+  }, [productImages, product]);
+
+  const selectedIndex = allImages.indexOf(selectedImageUrl);
+  const currentIndex = selectedIndex >= 0 ? selectedIndex : 0;
+
+  const goNext = () => {
+    const next = (currentIndex + 1) % allImages.length;
+    setSelectedImageUrl(allImages[next]);
+  };
+
+  const goPrev = () => {
+    const prev = (currentIndex - 1 + allImages.length) % allImages.length;
+    setSelectedImageUrl(allImages[prev]);
+  };
 
   const handleAddToCart = async () => {
     if (!user) { router.push('/login'); return; }
@@ -115,8 +161,8 @@ function ProductDetailContent() {
 
   if (!product) return null;
 
-  const images = product.images?.length ? product.images : [product.imageUrl];
   const stockStatus = getStockStatus(product.stock);
+  const displayImage = selectedImageUrl || FALLBACK_IMAGE;
   const ratingBreakdown = [5, 4, 3, 2, 1].map((r) => ({
     rating: r,
     count: reviews.filter((rev) => rev.rating === r).length,
@@ -144,14 +190,13 @@ function ProductDetailContent() {
           <div className="grid md:grid-cols-2 gap-8 lg:gap-12 mb-12">
             {/* Image gallery */}
             <div className="space-y-3">
+              {/* Main image */}
               <div className="relative rounded-xl overflow-hidden border border-kili-border bg-kili-elevated aspect-[4/3]">
-                <AppImage
-                  src={images[selectedImage] || ''}
+                <img
+                  src={displayImage}
                   alt={`${product.name} — main product image`}
-                  fill
-                  priority
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  className="object-cover"
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_IMAGE; }}
                 />
                 <div className="absolute top-3 left-3 flex flex-col gap-2">
                   {product.discount && product.discount > 0 && (
@@ -166,20 +211,59 @@ function ProductDetailContent() {
                 >
                   <Icon name="HeartIcon" variant={wishlistItemId ? 'solid' : 'outline'} size={18} />
                 </button>
+                {/* Zoom button */}
+                <button
+                  onClick={() => setLightboxOpen(true)}
+                  className="absolute bottom-3 right-3 w-9 h-9 rounded-lg bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+                  aria-label="Zoom image"
+                >
+                  <Icon name="MagnifyingGlassPlusIcon" size={18} />
+                </button>
+                {/* Prev/Next arrows */}
+                {allImages.length > 1 && (
+                  <>
+                    <button
+                      onClick={goPrev}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+                      aria-label="Previous image"
+                    >
+                      <Icon name="ChevronLeftIcon" size={18} />
+                    </button>
+                    <button
+                      onClick={goNext}
+                      className="absolute right-12 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+                      aria-label="Next image"
+                    >
+                      <Icon name="ChevronRightIcon" size={18} />
+                    </button>
+                  </>
+                )}
               </div>
-              {images.length > 1 && (
+
+              {/* Thumbnails */}
+              {allImages.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto pb-1">
-                  {images.map((img, idx) => (
+                  {allImages.map((img, idx) => (
                     <button
                       key={idx}
-                      onClick={() => setSelectedImage(idx)}
-                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${selectedImage === idx ? 'border-primary' : 'border-kili-border hover:border-kili-muted'}`}
+                      onClick={() => setSelectedImageUrl(img)}
+                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${selectedImageUrl === img ? 'border-primary' : 'border-kili-border hover:border-kili-muted'}`}
                       aria-label={`View image ${idx + 1}`}
                     >
-                      <img src={img} alt={`${product.name} thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                      <img
+                        src={img}
+                        alt={`${product.name} thumbnail ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_IMAGE; }}
+                      />
                     </button>
                   ))}
                 </div>
+              )}
+
+              {/* Image counter */}
+              {allImages.length > 1 && (
+                <p className="text-xs text-kili-subtle text-center">{currentIndex + 1} / {allImages.length}</p>
               )}
             </div>
 
@@ -295,7 +379,6 @@ function ProductDetailContent() {
 
             {activeTab === 'reviews' && (
               <div className="space-y-6">
-                {/* Rating summary */}
                 <div className="flex gap-8 p-5 bg-kili-elevated border border-kili-border rounded-xl">
                   <div className="text-center">
                     <p className="text-5xl font-bold text-kili-fg">{product.rating.toFixed(1)}</p>
@@ -315,7 +398,6 @@ function ProductDetailContent() {
                   </div>
                 </div>
 
-                {/* Review form */}
                 {user && (
                   <form onSubmit={handleSubmitReview} className="p-5 bg-kili-elevated border border-kili-border rounded-xl space-y-4">
                     <h3 className="font-semibold text-kili-fg">Write a Review</h3>
@@ -339,7 +421,6 @@ function ProductDetailContent() {
                   </form>
                 )}
 
-                {/* Reviews list */}
                 {reviews.length === 0 ? (
                   <p className="text-center text-kili-muted py-8">No reviews yet. Be the first to review!</p>
                 ) : (
@@ -367,7 +448,6 @@ function ProductDetailContent() {
             )}
           </div>
 
-          {/* Related products */}
           {relatedProducts.length > 0 && (
             <div>
               <h2 className="text-xl font-display font-semibold text-kili-fg mb-4">Related Products</h2>
@@ -381,6 +461,52 @@ function ProductDetailContent() {
         </div>
       </main>
       <Footer />
+
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close lightbox"
+          >
+            <Icon name="XMarkIcon" size={22} />
+          </button>
+          {allImages.length > 1 && (
+            <>
+              <button
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+                onClick={(e) => { e.stopPropagation(); goPrev(); }}
+                aria-label="Previous image"
+              >
+                <Icon name="ChevronLeftIcon" size={22} />
+              </button>
+              <button
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+                onClick={(e) => { e.stopPropagation(); goNext(); }}
+                aria-label="Next image"
+              >
+                <Icon name="ChevronRightIcon" size={22} />
+              </button>
+            </>
+          )}
+          <img
+            src={displayImage}
+            alt={`${product.name} — zoomed view`}
+            className="max-w-full max-h-[85vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+            onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_IMAGE; }}
+          />
+          {allImages.length > 1 && (
+            <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-sm">
+              {currentIndex + 1} / {allImages.length}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
