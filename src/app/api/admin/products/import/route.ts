@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import {
+  getCategories,
+  createCategory,
+  createProduct,
+} from '@/lib/supabase/services';
 
 // Use service role client to bypass RLS for server-side import
 const supabaseAdmin = createClient(
@@ -20,6 +25,7 @@ interface ImportProductBody {
   supplier?: string;
   supplierUrl?: string;
   status?: string;
+  stock?: number;
 }
 
 function generateSlug(name: string): string {
@@ -29,34 +35,6 @@ function generateSlug(name: string): string {
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
-}
-
-async function getOrCreateCategory(categoryName: string): Promise<string | null> {
-  // Try to find existing category (case-insensitive, no .single() to avoid error on 0 rows)
-  const { data: existing, error: findError } = await supabaseAdmin
-    .from('categories')
-    .select('id')
-    .ilike('name', categoryName)
-    .limit(1);
-
-  if (!findError && existing && existing.length > 0) {
-    return existing[0].id;
-  }
-
-  // Auto-create category if not found
-  let slug = generateSlug(categoryName);
-  const { data: created, error } = await supabaseAdmin
-    .from('categories')
-    .insert({
-      name: categoryName,
-      slug,
-      is_active: true,
-    })
-    .select('id')
-    .single();
-
-  if (error) return null;
-  return created.id;
 }
 
 async function ensureUniqueSlug(baseSlug: string): Promise<string> {
@@ -132,11 +110,38 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // --- Resolve Category ---
-  const categoryId = await getOrCreateCategory(body.category);
-  if (!categoryId) {
+  // --- Resolve or Create Category ---
+  const categoryName = String(body.category || 'Electronics').trim();
+
+  let categories = await getCategories();
+
+  let categoryDoc = categories.find(
+    (cat: any) =>
+      String(cat.name).trim().toLowerCase() === categoryName.toLowerCase()
+  );
+
+  if (!categoryDoc) {
+    try {
+      categoryDoc = await createCategory({
+        name: categoryName,
+        icon: '📱',
+        color: '#6366F1',
+        description: `${categoryName} products`,
+      });
+    } catch (err: any) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Failed to create category "${categoryName}": ${err?.message ?? 'Unknown error'}`,
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (!categoryDoc || !categoryDoc.id) {
     return NextResponse.json(
-      { success: false, error: `Failed to resolve or create category: ${body.category}` },
+      { success: false, error: `Failed to resolve or create category: ${categoryName}` },
       { status: 500 }
     );
   }
@@ -145,41 +150,53 @@ export async function POST(request: NextRequest) {
   const baseSlug = generateSlug(body.name);
   let slug = await ensureUniqueSlug(baseSlug);
 
-  // --- Insert Product ---
-  const productData = {
-    name: body.name,
-    slug,
-    description: body.description,
-    category_id: categoryId,
-    price: body.price,
-    cover_image_url: body.mainImage,
-    image_url: body.mainImage,
-    colors: body.colors ?? [],
-    has_variants: body.hasVariants ?? false,
-    variant_type: body.variantType ?? '',
-    supplier: body.supplier ?? '',
-    supplier_url: body.supplierUrl ?? '',
-    is_active: body.status === 'active' || body.status === undefined,
-    stock: 0,
-  };
-
-  const { data: product, error: productError } = await supabaseAdmin
-    .from('products')
-    .insert(productData)
-    .select('id')
-    .single();
-
-  if (productError || !product) {
+  // --- Create Product via service ---
+  let product: any;
+  try {
+    product = await createProduct({
+      name: body.name,
+      slug,
+      description: body.description,
+      categoryId: categoryDoc.id,
+      price: body.price,
+      imageUrl: body.mainImage,
+      images: body.images ?? [],
+      stock: body.stock ?? 0,
+      isActive: body.status === 'active' || body.status === undefined,
+      isFeatured: false,
+      isTrending: false,
+      isOnSale: false,
+      isNew: true,
+    });
+  } catch (err: any) {
     return NextResponse.json(
       {
         success: false,
-        error: productError?.message ?? 'Failed to insert product.',
+        error: err?.message ?? 'Failed to insert product.',
       },
       { status: 500 }
     );
   }
 
   const productId = product.id;
+
+  // --- Save supplier / colors / variants via supabaseAdmin (extra fields not in base createProduct) ---
+  const { error: extraFieldsError } = await supabaseAdmin
+    .from('products')
+    .update({
+      cover_image_url: body.mainImage,
+      colors: body.colors ?? [],
+      has_variants: body.hasVariants ?? false,
+      variant_type: body.variantType ?? '',
+      supplier: body.supplier ?? '',
+      supplier_url: body.supplierUrl ?? '',
+    })
+    .eq('id', productId);
+
+  if (extraFieldsError) {
+    // Non-fatal — product was created, extra fields failed
+    console.warn('Could not save extra product fields:', extraFieldsError.message);
+  }
 
   // --- Insert Cover Image into product_images ---
   const imageInserts: { product_id: string; image_url: string; is_cover: boolean; sort_order: number }[] = [
