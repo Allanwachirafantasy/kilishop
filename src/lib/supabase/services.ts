@@ -7,6 +7,15 @@ import { createClient } from '@/lib/supabase/client';
 // TYPES
 // ============================================================
 
+export interface ProductImage {
+  id: string;
+  productId: string;
+  imageUrl: string;
+  isCover: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
 export interface Category {
   id: string;
   name: string;
