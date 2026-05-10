@@ -2,6 +2,33 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // Skip middleware for Next.js internal RSC/prefetch requests to prevent fetch failures
+  const isRSCRequest =
+    request.headers.get('RSC') === '1' ||
+    request.headers.get('Next-Router-Prefetch') === '1' ||
+    request.nextUrl.searchParams.has('_rsc');
+
+  if (isRSCRequest) {
+    return NextResponse.next({ request });
+  }
+
+  // Redirect root to homepage (no auth needed)
+  if (pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/homepage';
+    return NextResponse.redirect(url);
+  }
+
+  // Only run Supabase auth for protected routes
+  const isProtectedRoute =
+    pathname.startsWith('/admin') || pathname.startsWith('/dashboard');
+
+  if (!isProtectedRoute) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -26,8 +53,6 @@ export async function middleware(request: NextRequest) {
   // Refresh session
   const { data: { user } } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
-
   // Protect admin routes
   if (pathname.startsWith('/admin')) {
     if (!user) {
@@ -37,22 +62,32 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Check role from user_profiles table (most reliable)
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+    // Check role from user_profiles table
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
 
-    const role = profile?.role ||
-      user.user_metadata?.role ||
-      user.app_metadata?.role ||
-      'customer';
+      const role = profile?.role ||
+        user.user_metadata?.role ||
+        user.app_metadata?.role ||
+        'customer';
 
-    if (role !== 'admin') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/homepage';
-      return NextResponse.redirect(url);
+      if (role !== 'admin') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/homepage';
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      // If DB check fails, fall back to metadata role
+      const role = user.user_metadata?.role || user.app_metadata?.role || 'customer';
+      if (role !== 'admin') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/homepage';
+        return NextResponse.redirect(url);
+      }
     }
   }
 
@@ -64,13 +99,6 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set('redirect', pathname);
       return NextResponse.redirect(url);
     }
-  }
-
-  // Redirect root to homepage
-  if (pathname === '/') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/homepage';
-    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;
