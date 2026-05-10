@@ -3,8 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 import {
   getCategories,
   createCategory,
-  createProduct,
 } from '@/lib/supabase/services';
+
+// Validate service role key at module load time
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('SUPABASE_SERVICE_ROLE_KEY is not set. Product import will fail.');
+}
 
 // Use service role client to bypass RLS for server-side import
 const supabaseAdmin = createClient(
@@ -57,6 +61,14 @@ async function ensureUniqueSlug(baseSlug: string): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+  // --- Service Role Key Check ---
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { success: false, error: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is not set.' },
+      { status: 500 }
+    );
+  }
+
   // --- API Key Authentication ---
   const importApiKey = request.headers.get('x-import-api-key');
   const expectedKey = process.env.IMPORT_API_KEY;
@@ -150,53 +162,45 @@ export async function POST(request: NextRequest) {
   const baseSlug = generateSlug(body.name);
   let slug = await ensureUniqueSlug(baseSlug);
 
-  // --- Create Product via service ---
-  let product: any;
-  try {
-    product = await createProduct({
-      name: body.name,
-      slug,
-      description: body.description,
-      categoryId: categoryDoc.id,
-      price: body.price,
-      imageUrl: body.mainImage,
-      images: body.images ?? [],
-      stock: body.stock ?? 0,
-      isActive: body.status === 'active' || body.status === undefined,
-      isFeatured: false,
-      isTrending: false,
-      isOnSale: false,
-      isNew: true,
-    });
-  } catch (err: any) {
+  // --- Insert Product directly via supabaseAdmin (bypasses RLS) ---
+  const productData = {
+    name: body.name,
+    slug,
+    description: body.description,
+    category_id: categoryDoc.id,
+    price: body.price,
+    cover_image_url: body.mainImage,
+    image_url: body.mainImage,
+    stock: body.stock ?? 0,
+    is_active: body.status === 'active' || body.status === undefined,
+    is_featured: false,
+    is_trending: false,
+    is_on_sale: false,
+    is_new: true,
+    colors: body.colors ?? [],
+    has_variants: body.hasVariants ?? false,
+    variant_type: body.variantType ?? '',
+    supplier: body.supplier ?? '',
+    supplier_url: body.supplierUrl ?? '',
+  };
+
+  const { data: product, error: insertError } = await supabaseAdmin
+    .from('products')
+    .insert(productData)
+    .select()
+    .single();
+
+  if (insertError) {
     return NextResponse.json(
       {
         success: false,
-        error: err?.message ?? 'Failed to insert product.',
+        error: `Failed to insert product: ${insertError.message}`,
       },
       { status: 500 }
     );
   }
 
   const productId = product.id;
-
-  // --- Save supplier / colors / variants via supabaseAdmin (extra fields not in base createProduct) ---
-  const { error: extraFieldsError } = await supabaseAdmin
-    .from('products')
-    .update({
-      cover_image_url: body.mainImage,
-      colors: body.colors ?? [],
-      has_variants: body.hasVariants ?? false,
-      variant_type: body.variantType ?? '',
-      supplier: body.supplier ?? '',
-      supplier_url: body.supplierUrl ?? '',
-    })
-    .eq('id', productId);
-
-  if (extraFieldsError) {
-    // Non-fatal — product was created, extra fields failed
-    console.warn('Could not save extra product fields:', extraFieldsError.message);
-  }
 
   // --- Insert Cover Image into product_images ---
   const imageInserts: { product_id: string; image_url: string; is_cover: boolean; sort_order: number }[] = [
