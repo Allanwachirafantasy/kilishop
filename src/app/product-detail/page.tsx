@@ -302,6 +302,19 @@ function ProductDetailContent() {
                 )}
               </div>
 
+              {product.colors?.length > 0 && (
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  {product.colors.map((color: string) => (
+                    <span
+                      key={color}
+                      className="px-3 py-1 rounded-full border text-sm bg-gray-100"
+                    >
+                      {color}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="divider" />
 
               <div className="flex items-center gap-4">
