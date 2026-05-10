@@ -21,9 +21,13 @@ interface ImportProductBody {
   description: string;
   category: string;
   price: number;
-  mainImage: string;
+  mainImage?: string;
+  image?: string;
+  thumbnail?: string;
   images?: string[];
   colors?: string[];
+  availableColors?: string[];
+  variants?: any[];
   hasVariants?: boolean;
   variantType?: string;
   supplier?: string;
@@ -162,24 +166,42 @@ export async function POST(request: NextRequest) {
   const baseSlug = generateSlug(body.name);
   let slug = await ensureUniqueSlug(baseSlug);
 
+  // --- Resolve image, gallery, colors, and variants ---
+  const mainImage =
+    body.mainImage ||
+    body.image ||
+    body.thumbnail ||
+    body.images?.[0] ||
+    '';
+
+  const galleryImages = Array.isArray(body.images) ? body.images : [];
+
+  const colors: string[] =
+    body.colors ||
+    body.availableColors ||
+    [];
+
+  const variants: any[] = body.variants || [];
+
   // --- Insert Product directly via supabaseAdmin (bypasses RLS) ---
   const productData = {
     name: body.name,
     slug,
     description: body.description,
     category_id: categoryDoc.id,
-    price: body.price,
-    cover_image_url: body.mainImage,
-    image_url: body.mainImage,
+    price: Number(body.price),
+    cover_image_url: mainImage,
+    image_url: mainImage,
+    images: galleryImages,
     stock: body.stock ?? 0,
     is_active: body.status === 'active' || body.status === undefined,
     is_featured: false,
     is_trending: false,
     is_on_sale: false,
     is_new: true,
-    colors: body.colors ?? [],
-    has_variants: body.hasVariants ?? false,
-    variant_type: body.variantType ?? '',
+    colors,
+    has_variants: body.hasVariants || colors.length > 0 || variants.length > 0,
+    variant_type: body.variantType || 'color',
     supplier: body.supplier ?? '',
     supplier_url: body.supplierUrl ?? '',
   };
@@ -203,19 +225,21 @@ export async function POST(request: NextRequest) {
   const productId = product.id;
 
   // --- Insert Cover Image into product_images ---
-  const imageInserts: { product_id: string; image_url: string; is_cover: boolean; sort_order: number }[] = [
-    {
+  const imageInserts: { product_id: string; image_url: string; is_cover: boolean; sort_order: number }[] = [];
+
+  if (mainImage) {
+    imageInserts.push({
       product_id: productId,
-      image_url: body.mainImage,
+      image_url: mainImage,
       is_cover: true,
       sort_order: 0,
-    },
-  ];
+    });
+  }
 
   // --- Insert Extra Gallery Images ---
-  if (Array.isArray(body.images) && body.images.length > 0) {
-    body.images.forEach((url, index) => {
-      if (url) {
+  if (galleryImages.length > 0) {
+    galleryImages.forEach((url, index) => {
+      if (url && url !== mainImage) {
         imageInserts.push({
           product_id: productId,
           image_url: url,
