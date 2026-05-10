@@ -62,6 +62,7 @@ export interface CartItem {
   userId: string;
   productId: string;
   quantity: number;
+  selectedColor?: string | null;
   product?: Product;
   createdAt: string;
 }
@@ -503,12 +504,13 @@ export async function getCartItems(userId: string): Promise<CartItem[]> {
     userId: row.user_id,
     productId: row.product_id,
     quantity: row.quantity,
+    selectedColor: row.selected_color || null,
     product: row.products ? mapProduct(row.products) : undefined,
     createdAt: row.created_at,
   }));
 }
 
-export async function addToCart(userId: string, productId: string, quantity = 1): Promise<void> {
+export async function addToCart(userId: string, productId: string, quantity = 1, selectedColor?: string | null): Promise<void> {
   const supabase = createClient();
   // Check stock
   const { data: product } = await supabase
@@ -521,7 +523,7 @@ export async function addToCart(userId: string, productId: string, quantity = 1)
   const { error } = await supabase
     .from('cart_items')
     .upsert(
-      { user_id: userId, product_id: productId, quantity },
+      { user_id: userId, product_id: productId, quantity, selected_color: selectedColor || null },
       { onConflict: 'user_id,product_id' }
     );
   if (error) throw error;

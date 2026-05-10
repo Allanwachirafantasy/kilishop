@@ -31,6 +31,7 @@ function ProductDetailContent() {
   const [loading, setLoading] = useState(true);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
   const [addedToCart, setAddedToCart] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
@@ -39,6 +40,7 @@ function ProductDetailContent() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewMsg, setReviewMsg] = useState('');
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [colorError, setColorError] = useState(false);
 
   useEffect(() => {
     if (!productId) {
@@ -108,9 +110,14 @@ function ProductDetailContent() {
   const handleAddToCart = async () => {
     if (!user) { router.push('/login'); return; }
     if (!product) return;
+    if (product.colors && product.colors.length > 0 && !selectedColor) {
+      setColorError(true);
+      setTimeout(() => setColorError(false), 3000);
+      return;
+    }
     setAddingToCart(true);
     try {
-      await addToCart(user.id, product.id, quantity);
+      await addToCart(user.id, product.id, quantity, selectedColor);
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
     } catch (err: any) {
@@ -302,16 +309,29 @@ function ProductDetailContent() {
                 )}
               </div>
 
-              {product.colors?.length > 0 && (
-                <div className="flex gap-2 mt-3 flex-wrap">
-                  {product.colors.map((color: string) => (
-                    <span
-                      key={color}
-                      className="px-3 py-1 rounded-full border text-sm bg-gray-100"
-                    >
-                      {color}
-                    </span>
-                  ))}
+              {product.colors && product.colors.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-kili-fg mb-2">
+                    Choose color:
+                    {colorError && (
+                      <span className="ml-2 text-red-500 font-normal">Please select a color</span>
+                    )}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {product.colors.map((color: string) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => { setSelectedColor(color); setColorError(false); }}
+                        className={`px-3 py-1 rounded-full border text-sm transition-all ${
+                          selectedColor === color
+                            ? 'border-primary bg-primary/10 text-primary font-medium' :'border-kili-border bg-kili-elevated text-kili-muted hover:border-primary/60'
+                        }`}
+                      >
+                        {color}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
