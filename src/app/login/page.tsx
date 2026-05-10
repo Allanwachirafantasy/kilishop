@@ -167,14 +167,6 @@ function LoginPageInner() {
                 </div>
               )}
             </div>
-            {/* Demo credentials */}
-            <div className="mt-4 p-4 rounded-xl bg-white/10 border border-white/15 space-y-2">
-              <p className="text-xs font-semibold text-white/60 uppercase tracking-wide">Demo Accounts</p>
-              <div className="text-xs text-white/75 space-y-1">
-                <p>🛡️ <span className="text-primary font-semibold">Admin:</span> admin@kilishop.com / Admin@123</p>
-                <p>🛒 <span className="text-primary font-semibold">Customer:</span> customer@kilishop.com / Customer@123</p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
