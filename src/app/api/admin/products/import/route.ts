@@ -32,14 +32,16 @@ function generateSlug(name: string): string {
 }
 
 async function getOrCreateCategory(categoryName: string): Promise<string | null> {
-  // Try to find existing category
-  const { data: existing } = await supabaseAdmin
+  // Try to find existing category (case-insensitive, no .single() to avoid error on 0 rows)
+  const { data: existing, error: findError } = await supabaseAdmin
     .from('categories')
     .select('id')
     .ilike('name', categoryName)
-    .single();
+    .limit(1);
 
-  if (existing) return existing.id;
+  if (!findError && existing && existing.length > 0) {
+    return existing[0].id;
+  }
 
   // Auto-create category if not found
   let slug = generateSlug(categoryName);
