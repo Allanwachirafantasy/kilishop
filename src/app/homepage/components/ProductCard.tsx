@@ -136,6 +136,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart, onWishl
             <span className="price-original">{formatPrice(product.originalPrice)}</span>
           )}
         </div>
+        {product.colors && product.colors.length > 0 && (
+          <div className="flex gap-1.5 mb-3 flex-wrap">
+            {product.colors.map((color: string) => (
+              <span key={color} className="px-2 py-0.5 rounded-full border text-xs bg-gray-100 text-gray-700">
+                {color}
+              </span>
+            ))}
+          </div>
+        )}
         <button
           className={`w-full py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-1.5 ${
             addedToCart

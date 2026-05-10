@@ -38,6 +38,7 @@ export interface Product {
   discount?: number;
   imageUrl: string;
   images: string[];
+  colors?: string[];
   categoryId?: string;
   category?: Category;
   brand: string;
@@ -158,6 +159,7 @@ function mapProduct(row: any): Product {
     discount: row.discount || 0,
     imageUrl: row.image_url || '',
     images: row.images || [],
+    colors: row.colors || [],
     categoryId: row.category_id,
     category: row.categories ? mapCategory(row.categories) : undefined,
     brand: row.brand || '',
