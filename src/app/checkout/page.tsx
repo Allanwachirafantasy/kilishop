@@ -34,6 +34,7 @@ export default function CheckoutPage() {
   const [orderError, setOrderError] = useState('');
   const [paymentError, setPaymentError] = useState('');
   const [mpesaPushSent, setMpesaPushSent] = useState(false);
+  const [debugPaymentInfo, setDebugPaymentInfo] = useState<{ status?: number; rawResponse?: string; error?: string } | null>(null);
 
   const [form, setForm] = useState<DeliveryAddress>({
     firstName: '',
@@ -185,8 +186,18 @@ export default function CheckoutPage() {
 
       const paymentData = await paymentRes.json();
 
+      // DEBUG: capture raw response details
+      setDebugPaymentInfo({
+        status: paymentData.status,
+        rawResponse: paymentData.rawResponse,
+        error: paymentData.error,
+      });
+
       if (!paymentRes.ok || !paymentData.success) {
-        setPaymentError(paymentData.error || 'Payment initiation failed. Please try again.');
+        setPaymentError(
+          `[DEBUG] Status: ${paymentData.status ?? paymentRes.status}\n` +
+          `Raw: ${paymentData.rawResponse ?? paymentData.error ?? 'No response body'}`
+        );
         return;
       }
 
@@ -531,7 +542,11 @@ export default function CheckoutPage() {
                   </div>
                   {(orderError || paymentError) && (
                     <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
-                      {orderError || paymentError}
+                      {paymentError ? (
+                        <pre className="whitespace-pre-wrap break-all text-xs">{paymentError}</pre>
+                      ) : (
+                        orderError
+                      )}
                     </div>
                   )}
                 </div>
