@@ -134,6 +134,7 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     if (!user || cartItems.length === 0) return;
     setPlacingOrder(true);
+    setProcessingPayment(false);
     setOrderError('');
     setPaymentError('');
 
@@ -146,33 +147,46 @@ export default function CheckoutPage() {
       // 2. For COD, mark as placed immediately
       if (paymentMethod === 'cod') {
         setOrderPlaced(true);
-        setPlacingOrder(false);
         return;
       }
 
       // 3. Initiate IntaSend payment
       setProcessingPayment(true);
-      const paymentRes = await fetch('/api/payments/intasend/initiate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: order.id,
-          paymentMethod,
-          phoneNumber: paymentMethod === 'mpesa' ? mpesaPhone.replace(/\s+/g, '') : undefined,
-          amount: total,
-          currency: 'KES',
-          email: form.email,
-          firstName: form.firstName,
-          lastName: form.lastName,
-        }),
-      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
+
+      let paymentRes: Response;
+      try {
+        paymentRes = await fetch('/api/payments/intasend/initiate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: order.id,
+            paymentMethod,
+            phoneNumber: paymentMethod === 'mpesa' ? mpesaPhone.replace(/\s+/g, '') : undefined,
+            amount: total,
+            currency: 'KES',
+            email: form.email,
+            firstName: form.firstName,
+            lastName: form.lastName,
+          }),
+          signal: controller.signal,
+        });
+      } catch (fetchErr: any) {
+        if (fetchErr?.name === 'AbortError') {
+          setPaymentError('Payment request timed out. Please check your connection and try again.');
+          return;
+        }
+        throw fetchErr;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       const paymentData = await paymentRes.json();
 
       if (!paymentRes.ok || !paymentData.success) {
         setPaymentError(paymentData.error || 'Payment initiation failed. Please try again.');
-        setProcessingPayment(false);
-        setPlacingOrder(false);
         return;
       }
 
@@ -180,13 +194,13 @@ export default function CheckoutPage() {
         setMpesaPushSent(true);
         setOrderPlaced(true);
       } else if (paymentMethod === 'card' && paymentData.checkoutUrl) {
-        // Redirect to IntaSend card checkout
         window.location.href = paymentData.checkoutUrl;
         return;
       } else {
         setOrderPlaced(true);
       }
     } catch (err: any) {
+      console.error('Place order error:', err);
       setOrderError(err?.message || 'Failed to place order. Please try again.');
     } finally {
       setPlacingOrder(false);
