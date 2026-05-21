@@ -17,6 +17,13 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-red-50 text-red-700 border border-red-200',
 };
 
+const paymentStatusColors: Record<string, string> = {
+  paid: 'bg-green-50 text-green-700 border border-green-200',
+  pending: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  failed: 'bg-red-50 text-red-700 border border-red-200',
+  refunded: 'bg-purple-50 text-purple-700 border border-purple-200',
+};
+
 export default function AdminOrdersPage() {
   const { user, isAdmin, loading, signOut, profile } = useAuth();
   const router = useRouter();
@@ -57,7 +64,8 @@ export default function AdminOrdersPage() {
     const matchSearch = !searchQuery ||
       o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (o.userName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (o.userEmail || '').toLowerCase().includes(searchQuery.toLowerCase());
+      (o.userEmail || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (o.transactionId || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchStatus = !filterStatus || o.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -93,7 +101,7 @@ export default function AdminOrdersPage() {
           <div className="p-4 border-b border-kili-border flex items-center gap-3 flex-wrap">
             <div className="flex-1 relative min-w-48">
               <Icon name="MagnifyingGlassIcon" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-kili-muted" />
-              <input type="text" placeholder="Search orders..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="input-dark pl-9 py-2 text-sm" />
+              <input type="text" placeholder="Search orders, customers, transaction IDs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="input-dark pl-9 py-2 text-sm" />
             </div>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input-dark py-2 text-sm w-44">
               <option value="">All Statuses</option>
@@ -116,6 +124,7 @@ export default function AdminOrdersPage() {
                     <th className="text-left px-4 py-3 text-kili-muted font-medium">Order ID</th>
                     <th className="text-left px-4 py-3 text-kili-muted font-medium">Customer</th>
                     <th className="text-left px-4 py-3 text-kili-muted font-medium">Amount</th>
+                    <th className="text-left px-4 py-3 text-kili-muted font-medium">Payment</th>
                     <th className="text-left px-4 py-3 text-kili-muted font-medium">Date</th>
                     <th className="text-left px-4 py-3 text-kili-muted font-medium">Status</th>
                     <th className="text-left px-4 py-3 text-kili-muted font-medium">Update Status</th>
@@ -130,7 +139,29 @@ export default function AdminOrdersPage() {
                         <p className="text-xs text-kili-muted">{o.userEmail || ''}</p>
                       </td>
                       <td className="px-4 py-3 font-semibold text-kili-fg">{formatPrice(o.total)}</td>
-                      <td className="px-4 py-3 text-kili-muted">{new Date(o.createdAt).toLocaleDateString()}</td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-kili-muted capitalize">
+                              {o.paymentMethod === 'mpesa' ? '📱 M-Pesa' : o.paymentMethod === 'card' ? '💳 Card' : '💵 COD'}
+                            </span>
+                          </div>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[o.paymentStatus] || 'bg-gray-50 text-gray-600 border border-gray-200'}`}>
+                            {o.paymentStatus ? o.paymentStatus.charAt(0).toUpperCase() + o.paymentStatus.slice(1) : 'Pending'}
+                          </span>
+                          {o.transactionId && (
+                            <p className="text-xs text-kili-muted font-mono truncate max-w-[120px]" title={o.transactionId}>
+                              {o.transactionId}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-kili-muted">
+                        <p>{new Date(o.createdAt).toLocaleDateString()}</p>
+                        {o.paidAt && (
+                          <p className="text-xs text-green-600">Paid {new Date(o.paidAt).toLocaleDateString()}</p>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[o.status] || ''}`}>
                           {o.status.charAt(0).toUpperCase() + o.status.slice(1)}

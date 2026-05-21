@@ -10,6 +10,7 @@ import { getCartItems, createOrder, formatPrice, type CartItem, type DeliveryAdd
 import { useAuth } from '@/contexts/AuthContext';
 
 type Step = 'delivery' | 'payment' | 'review';
+type PaymentMethod = 'mpesa' | 'card' | 'cod';
 
 const KENYAN_COUNTIES = [
   'Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika',
@@ -22,11 +23,17 @@ export default function CheckoutPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loadingCart, setLoadingCart] = useState(true);
   const [step, setStep] = useState<Step>('delivery');
-  const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'card' | 'cod'>('mpesa');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mpesa');
+  const [mpesaPhone, setMpesaPhone] = useState('');
+  const [mpesaPhoneError, setMpesaPhoneError] = useState('');
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
+  const [orderId, setOrderId] = useState('');
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderError, setOrderError] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const [mpesaPushSent, setMpesaPushSent] = useState(false);
 
   const [form, setForm] = useState<DeliveryAddress>({
     firstName: '',
@@ -59,6 +66,7 @@ export default function CheckoutPage() {
           email: profile.email || '',
           phone: profile.phone || '',
         }));
+        setMpesaPhone(profile.phone || '');
       }
     }
   }, [user, authLoading, profile, router]);
@@ -92,11 +100,27 @@ export default function CheckoutPage() {
     return Object.keys(errors).length === 0;
   };
 
+  const validatePaymentStep = (): boolean => {
+    if (paymentMethod === 'mpesa') {
+      if (!mpesaPhone.trim()) {
+        setMpesaPhoneError('Phone number is required for M-Pesa');
+        return false;
+      }
+      const cleaned = mpesaPhone.replace(/\s+/g, '');
+      if (!/^(07|01|\+2547|\+2541|2547|2541)\d{8,}$/.test(cleaned)) {
+        setMpesaPhoneError('Enter a valid Kenyan phone number (e.g. 0712345678)');
+        return false;
+      }
+    }
+    setMpesaPhoneError('');
+    return true;
+  };
+
   const handleNext = () => {
     if (step === 'delivery') {
       if (validateDelivery()) setStep('payment');
     } else if (step === 'payment') {
-      setStep('review');
+      if (validatePaymentStep()) setStep('review');
     } else if (step === 'review') {
       handlePlaceOrder();
     }
@@ -111,14 +135,62 @@ export default function CheckoutPage() {
     if (!user || cartItems.length === 0) return;
     setPlacingOrder(true);
     setOrderError('');
+    setPaymentError('');
+
     try {
+      // 1. Create order in Supabase
       const order = await createOrder(user.id, cartItems, form, paymentMethod, shipping, 0);
       setOrderNumber(order.orderNumber);
-      setOrderPlaced(true);
+      setOrderId(order.id);
+
+      // 2. For COD, mark as placed immediately
+      if (paymentMethod === 'cod') {
+        setOrderPlaced(true);
+        setPlacingOrder(false);
+        return;
+      }
+
+      // 3. Initiate IntaSend payment
+      setProcessingPayment(true);
+      const paymentRes = await fetch('/api/payments/intasend/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          paymentMethod,
+          phoneNumber: paymentMethod === 'mpesa' ? mpesaPhone.replace(/\s+/g, '') : undefined,
+          amount: total,
+          currency: 'KES',
+          email: form.email,
+          firstName: form.firstName,
+          lastName: form.lastName,
+        }),
+      });
+
+      const paymentData = await paymentRes.json();
+
+      if (!paymentRes.ok || !paymentData.success) {
+        setPaymentError(paymentData.error || 'Payment initiation failed. Please try again.');
+        setProcessingPayment(false);
+        setPlacingOrder(false);
+        return;
+      }
+
+      if (paymentMethod === 'mpesa') {
+        setMpesaPushSent(true);
+        setOrderPlaced(true);
+      } else if (paymentMethod === 'card' && paymentData.checkoutUrl) {
+        // Redirect to IntaSend card checkout
+        window.location.href = paymentData.checkoutUrl;
+        return;
+      } else {
+        setOrderPlaced(true);
+      }
     } catch (err: any) {
       setOrderError(err?.message || 'Failed to place order. Please try again.');
     } finally {
       setPlacingOrder(false);
+      setProcessingPayment(false);
     }
   };
 
@@ -173,13 +245,20 @@ export default function CheckoutPage() {
                 <span className="text-kili-fg font-semibold">2-3 Business Days</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-kili-muted">Total Paid</span>
+                <span className="text-kili-muted">Total</span>
                 <span className="text-primary font-bold text-base">{formatPrice(total)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-kili-muted">Payment Method</span>
-                <span className="text-kili-fg capitalize">{paymentMethod === 'mpesa' ? 'M-Pesa' : paymentMethod === 'card' ? 'Card' : 'Cash on Delivery'}</span>
+                <span className="text-kili-fg capitalize">
+                  {paymentMethod === 'mpesa' ? 'M-Pesa' : paymentMethod === 'card' ? 'Card' : 'Cash on Delivery'}
+                </span>
               </div>
+              {mpesaPushSent && (
+                <div className="mt-2 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+                  📱 M-Pesa STK Push sent to <strong>{mpesaPhone}</strong>. Enter your PIN to complete payment.
+                </div>
+              )}
             </div>
             <div className="flex flex-col xs:flex-row gap-3 justify-center">
               <Link href="/homepage" className="btn-primary justify-center">
@@ -327,14 +406,36 @@ export default function CheckoutPage() {
                     <Icon name="CreditCardIcon" size={18} className="text-primary" />
                     Payment Method
                   </h2>
+
+                  {/* IntaSend badge */}
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-kili-elevated border border-kili-border text-xs text-kili-muted">
+                    <span className="text-green-500">🔒</span>
+                    Payments secured by <span className="font-semibold text-kili-fg">IntaSend</span>
+                  </div>
+
                   <div className="space-y-3">
                     {[
-                      { value: 'mpesa' as const, label: 'M-Pesa', desc: 'Pay via M-Pesa mobile money', icon: '📱' },
-                      { value: 'card' as const, label: 'Credit/Debit Card', desc: 'Visa, Mastercard, etc.', icon: '💳' },
-                      { value: 'cod' as const, label: 'Cash on Delivery', desc: 'Pay when you receive', icon: '💵' },
+                      { value: 'mpesa' as const, label: 'M-Pesa', desc: 'Pay via M-Pesa STK Push — instant & secure', icon: '📱' },
+                      { value: 'card' as const, label: 'Credit / Debit Card', desc: 'Visa, Mastercard — redirects to secure checkout', icon: '💳' },
+                      { value: 'cod' as const, label: 'Cash on Delivery', desc: 'Pay when you receive your order', icon: '💵' },
                     ].map((method) => (
-                      <label key={method.value} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${paymentMethod === method.value ? 'border-primary bg-primary/5' : 'border-kili-border hover:border-kili-muted'}`}>
-                        <input type="radio" name="payment" value={method.value} checked={paymentMethod === method.value} onChange={() => setPaymentMethod(method.value)} className="sr-only" />
+                      <label
+                        key={method.value}
+                        className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${
+                          paymentMethod === method.value ? 'border-primary bg-primary/5' : 'border-kili-border hover:border-kili-muted'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="payment"
+                          value={method.value}
+                          checked={paymentMethod === method.value}
+                          onChange={() => {
+                            setPaymentMethod(method.value);
+                            setMpesaPhoneError('');
+                          }}
+                          className="sr-only"
+                        />
                         <span className="text-2xl">{method.icon}</span>
                         <div className="flex-1">
                           <p className="font-medium text-kili-fg">{method.label}</p>
@@ -346,6 +447,41 @@ export default function CheckoutPage() {
                       </label>
                     ))}
                   </div>
+
+                  {/* M-Pesa phone input */}
+                  {paymentMethod === 'mpesa' && (
+                    <div className="mt-2 p-4 rounded-xl bg-kili-elevated border border-kili-border space-y-3">
+                      <p className="text-sm font-medium text-kili-fg flex items-center gap-2">
+                        <span>📱</span> M-Pesa Phone Number
+                      </p>
+                      <div>
+                        <input
+                          type="tel"
+                          value={mpesaPhone}
+                          onChange={(e) => {
+                            setMpesaPhone(e.target.value);
+                            setMpesaPhoneError('');
+                          }}
+                          placeholder="0712 345 678"
+                          className={`input-dark ${mpesaPhoneError ? 'border-red-500' : ''}`}
+                        />
+                        {mpesaPhoneError && <p className="text-xs text-red-500 mt-1">{mpesaPhoneError}</p>}
+                        <p className="text-xs text-kili-muted mt-1.5">
+                          You'll receive an STK Push prompt on this number. Enter your M-Pesa PIN to complete payment.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Card info */}
+                  {paymentMethod === 'card' && (
+                    <div className="mt-2 p-4 rounded-xl bg-kili-elevated border border-kili-border">
+                      <p className="text-sm text-kili-muted flex items-center gap-2">
+                        <span>💳</span>
+                        You'll be redirected to IntaSend's secure card checkout page after placing your order.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -373,8 +509,16 @@ export default function CheckoutPage() {
                     <p className="text-kili-muted">{form.address}, {form.city}, {form.county}</p>
                     <p className="text-kili-muted">{form.phone}</p>
                   </div>
-                  {orderError && (
-                    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{orderError}</div>
+                  <div className="p-4 bg-kili-elevated rounded-xl space-y-1 text-sm">
+                    <p className="font-medium text-kili-fg">Payment:</p>
+                    <p className="text-kili-muted">
+                      {paymentMethod === 'mpesa' ? `📱 M-Pesa — ${mpesaPhone}` : paymentMethod === 'card' ? '💳 Credit/Debit Card' : '💵 Cash on Delivery'}
+                    </p>
+                  </div>
+                  {(orderError || paymentError) && (
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                      {orderError || paymentError}
+                    </div>
                   )}
                 </div>
               )}
@@ -382,23 +526,23 @@ export default function CheckoutPage() {
               {/* Navigation buttons */}
               <div className="flex gap-3">
                 {step !== 'delivery' && (
-                  <button
-                    onClick={handleBack}
-                    className="btn-secondary py-2.5 px-5"
-                  >
+                  <button onClick={handleBack} className="btn-secondary py-2.5 px-5">
                     <Icon name="ArrowLeftIcon" size={16} />
                     Back
                   </button>
                 )}
                 <button
                   onClick={handleNext}
-                  disabled={placingOrder}
+                  disabled={placingOrder || processingPayment}
                   className="btn-primary flex-1 justify-center py-2.5"
                 >
-                  {placingOrder ? (
+                  {placingOrder || processingPayment ? (
                     <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : step === 'review' ? (
-                    <><Icon name="CheckIcon" size={16} />Place Order</>
+                    <>
+                      <Icon name="CheckIcon" size={16} />
+                      {paymentMethod === 'mpesa' ? 'Place Order & Send STK Push' : paymentMethod === 'card' ? 'Place Order & Pay by Card' : 'Place Order'}
+                    </>
                   ) : (
                     <>Continue <Icon name="ArrowRightIcon" size={16} /></>
                   )}
