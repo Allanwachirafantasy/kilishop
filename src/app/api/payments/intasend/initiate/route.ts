@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const INTASEND_API_BASE = 'https://sandbox.intasend.com/api/v1';
+const INTASEND_API_BASE = 'https://payment.intasend.com/api/v1';
 // Switch to 'https://payment.intasend.com/api/v1' for production
 
 function getSupabaseAdmin() {
