@@ -71,13 +71,18 @@ export async function POST(req: NextRequest) {
         api_ref: orderId,
       };
 
-      console.log('Sending IntaSend STK Push request...');
-      console.log(mpesaPayload);
+      const INTASEND_URL = `${INTASEND_API_BASE}/payment/mpesa-stk-push/`;
+
+      console.log("=== INTASEND REQUEST START ===");
+      console.log("URL:", INTASEND_URL);
+      console.log("Payload:", JSON.stringify(mpesaPayload, null, 2));
+      console.log("Phone:", formattedPhone);
+      console.log("Using key:", process.env.INTASEND_PUBLIC_KEY ? "YES" : "NO");
 
       let response: Response;
       try {
         response = await fetchWithTimeout(
-          `${INTASEND_API_BASE}/payment/mpesa-stk-push/`,
+          INTASEND_URL,
           {
             method: 'POST',
             headers: {
@@ -96,17 +101,18 @@ export async function POST(req: NextRequest) {
         throw fetchErr;
       }
 
-      console.log('IntaSend STK Push status:', response.status);
-      intasendResponse = await response.json();
-      console.log('IntaSend STK Push response:', intasendResponse);
+      console.log("Response status:", response.status);
 
-      if (!response.ok) {
-        console.error('IntaSend M-Pesa error:', intasendResponse);
-        return NextResponse.json(
-          { error: intasendResponse?.detail || intasendResponse?.message || 'M-Pesa payment initiation failed' },
-          { status: response.status }
-        );
-      }
+      const responseText = await response.text();
+      console.log("Raw IntaSend response:");
+      console.log(responseText);
+
+      // Temporarily return raw response to frontend for debugging
+      return NextResponse.json({
+        success: response.ok,
+        status: response.status,
+        rawResponse: responseText,
+      });
     } else if (paymentMethod === 'card') {
       const cardPayload = {
         amount: Number(parsedAmount),
