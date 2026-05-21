@@ -86,6 +86,9 @@ export interface Order {
   total: number;
   paymentMethod: 'mpesa' | 'card' | 'cod';
   paymentStatus: string;
+  transactionId?: string | null;
+  paymentReference?: string | null;
+  paidAt?: string | null;
   deliveryAddress: DeliveryAddress;
   notes: string;
   items?: OrderItem[];
