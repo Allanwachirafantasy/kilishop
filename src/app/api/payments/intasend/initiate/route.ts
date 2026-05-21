@@ -38,10 +38,15 @@ export async function POST(req: NextRequest) {
     const secretKey = process.env.INTASEND_SECRET_KEY;
     const publicKey = process.env.INTASEND_PUBLIC_KEY;
 
-    if (!secretKey || !publicKey) {
-      console.error('IntaSend: Missing INTASEND_SECRET_KEY or INTASEND_PUBLIC_KEY');
-      return NextResponse.json({ error: 'Payment service not configured' }, { status: 500 });
+    if (!secretKey) {
+      throw new Error("Missing INTASEND_SECRET_KEY");
     }
+
+    if (!publicKey) {
+      console.warn('IntaSend: INTASEND_PUBLIC_KEY is not set (only needed for frontend)');
+    }
+
+    console.log("Using secret key:", secretKey?.slice(0, 10));
 
     // Validate amount is positive
     const parsedAmount = parseFloat(amount);
@@ -77,7 +82,7 @@ export async function POST(req: NextRequest) {
       console.log("URL:", INTASEND_URL);
       console.log("Payload:", JSON.stringify(mpesaPayload, null, 2));
       console.log("Phone:", formattedPhone);
-      console.log("Using key:", process.env.INTASEND_PUBLIC_KEY ? "YES" : "NO");
+      console.log("Using secret key (first 10):", secretKey?.slice(0, 10));
 
       let response: Response;
       try {
